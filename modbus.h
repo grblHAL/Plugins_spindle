@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020 Terje Io
+  Copyright (c) 2020-2021 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -56,21 +56,24 @@ typedef struct {
     char adu[MODBUS_MAX_ADU_SIZE];
 } modbus_message_t;
 
+typedef void (*stream_set_direction_ptr)(bool tx);
+
 typedef struct {
-    bool (*set_baud_rate)(uint32_t baud);
-    void (*set_direction)(bool tx); // NULL if auto direction
-    uint16_t (*get_tx_buffer_count)(void);
-    uint16_t (*get_rx_buffer_count)(void);
-    void (*write)(const char *c, uint16_t len);
-    int16_t (*read)(void);
-    void (*flush_tx_buffer)(void);
-    void (*flush_rx_buffer)(void);
+    set_baud_rate_ptr set_baud_rate;
+    stream_set_direction_ptr set_direction; // NULL if auto direction
+    get_stream_buffer_count_ptr get_tx_buffer_count;
+    get_stream_buffer_count_ptr get_rx_buffer_count;
+    stream_write_n_ptr write;
+    stream_read_ptr read;
+    flush_stream_buffer_ptr flush_tx_buffer;
+    flush_stream_buffer_ptr flush_rx_buffer;
     // Callbacks
     void (*on_rx_packet)(modbus_message_t *msg);
     void (*on_rx_exception)(uint8_t code);
 } modbus_stream_t;
 
-bool modbus_init (modbus_stream_t *stream);
+modbus_stream_t *modbus_init (const io_stream_t *stream, stream_set_direction_ptr set_direction);
+bool modbus_isup (void);
 bool modbus_send (modbus_message_t *msg, bool block);
 modbus_state_t modbus_get_state (void);
 

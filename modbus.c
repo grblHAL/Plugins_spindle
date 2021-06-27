@@ -52,12 +52,12 @@ typedef struct queue_entry {
 static const uint32_t baud[]    = { 2400, 4800, 9600, 19200, 38400, 115200 };
 static const uint16_t silence[] = {   16,    8,    4,     2,     2,      2 };
 
-static modbus_stream_t *stream;
+static modbus_stream_t stream;
 static uint16_t rx_timeout = 0, silence_until = 0, silence_timeout;
 static int16_t exception_code = 0;
 static queue_entry_t queue[MODBUS_QUEUE_LENGTH];
 static modbus_settings_t modbus;
-static volatile bool spin_lock = false;
+static volatile bool spin_lock = false, is_up = false;
 static volatile queue_entry_t *tail, *head, *packet = NULL;
 static volatile modbus_state_t state = ModBus_Idle;
 
@@ -124,12 +124,12 @@ void modbus_poll (sys_state_t grbl_state)
                 state = ModBus_TX;
                 rx_timeout = modbus.rx_timeout;
 
-                if(stream->set_direction)
-                    stream->set_direction(true);
+                if(stream.set_direction)
+                    stream.set_direction(true);
 
                 packet->sent = true;
-                stream->flush_rx_buffer();
-                stream->write(((queue_entry_t *)packet)->msg.adu, ((queue_entry_t *)packet)->msg.tx_length);
+                stream.flush_rx_buffer();
+                stream.write(((queue_entry_t *)packet)->msg.adu, ((queue_entry_t *)packet)->msg.tx_length);
             }
             break;
 
@@ -141,12 +141,12 @@ void modbus_poll (sys_state_t grbl_state)
             break;
 
         case ModBus_TX:
-            if(!stream->get_tx_buffer_count()) {
+            if(!stream.get_tx_buffer_count()) {
 
                 state = ModBus_AwaitReply;
 
-                if(stream->set_direction)
-                    stream->set_direction(false);
+                if(stream.set_direction)
+                    stream.set_direction(false);
             }
             break;
 
@@ -154,8 +154,8 @@ void modbus_poll (sys_state_t grbl_state)
             if(rx_timeout && --rx_timeout == 0) {
                 if(packet->async)
                     state = ModBus_Silent;
-                else if(stream->read() == 1 && (stream->read() & 0x80)) {
-                    exception_code = stream->read();
+                else if(stream.read() == 1 && (stream.read() & 0x80)) {
+                    exception_code = stream.read();
                     state = ModBus_Exception;
                 } else
                     state = ModBus_Timeout;
@@ -166,21 +166,21 @@ void modbus_poll (sys_state_t grbl_state)
                 return;
             }
 
-            if(stream->get_rx_buffer_count() >= packet->msg.rx_length) {
+            if(stream.get_rx_buffer_count() >= packet->msg.rx_length) {
 
                 char *buf = ((queue_entry_t *)packet)->msg.adu;
 
                 do {
-                    *buf++ = stream->read();
+                    *buf++ = stream.read();
                 } while(--packet->msg.rx_length);
 
-                if((state = packet->async ? ModBus_Silent : ModBus_GotReply) == ModBus_Silent)
-                    stream->on_rx_packet(&((queue_entry_t *)packet)->msg);
+                if((state = packet->async ? ModBus_Silent : ModBus_GotReply) == ModBus_Silent) {
+                    stream.on_rx_packet(&((queue_entry_t *)packet)->msg);
+                    packet = NULL;
+                }
 
                 silence_until = ms + silence_timeout;
-                packet = NULL;
             }
-
             break;
 
         default:
@@ -212,8 +212,8 @@ bool modbus_send (modbus_message_t *msg, bool block)
                 return false;
         }
 
-        if(stream->set_direction)
-            stream->set_direction(true);
+        if(stream.set_direction)
+            stream.set_direction(true);
 
         state = ModBus_TX;
         rx_timeout = modbus.rx_timeout;
@@ -221,8 +221,8 @@ bool modbus_send (modbus_message_t *msg, bool block)
         memcpy(&sync_msg.msg, msg, sizeof(modbus_message_t));
 
         sync_msg.async = false;
-        stream->flush_rx_buffer();
-        stream->write(sync_msg.msg.adu, sync_msg.msg.tx_length);
+        stream.flush_rx_buffer();
+        stream.write(sync_msg.msg.adu, sync_msg.msg.tx_length);
 
         packet = &sync_msg;
 
@@ -236,18 +236,18 @@ bool modbus_send (modbus_message_t *msg, bool block)
             else switch(state) {
 
                 case ModBus_Timeout:
-                    stream->on_rx_exception(0);
+                    stream.on_rx_exception(0);
                     poll = false;
                     break;
 
                 case ModBus_Exception:
-                    stream->on_rx_exception(exception_code == -1 ? 0 : (uint8_t)(exception_code & 0xFF));
+                    stream.on_rx_exception(exception_code == -1 ? 0 : (uint8_t)(exception_code & 0xFF));
                     poll = false;
                     break;
 
                 case ModBus_GotReply:
                     if(packet)
-                        stream->on_rx_packet(&((queue_entry_t *)packet)->msg);
+                        stream.on_rx_packet(&((queue_entry_t *)packet)->msg);
                     poll = block = false;
                     break;
 
@@ -255,7 +255,8 @@ bool modbus_send (modbus_message_t *msg, bool block)
                     break;
             }
         }
-
+    
+        packet = NULL;
         state = silence_until > 0 ? ModBus_Silent : ModBus_Idle;
 
     } else if(packet != &sync_msg) {
@@ -285,8 +286,8 @@ static void modbus_reset (void)
     silence_until = 0;
     state = ModBus_Idle;
 
-    stream->flush_tx_buffer();
-    stream->flush_rx_buffer();
+    stream.flush_tx_buffer();
+    stream.flush_rx_buffer();
 
     driver_reset();
 }
@@ -337,7 +338,7 @@ static status_code_t modbus_set_baud (setting_id_t id, uint_fast16_t value)
 {
     modbus.baud_rate = baud[(uint32_t)value];
     silence_timeout = silence[(uint32_t)value];
-    stream->set_baud_rate(modbus.baud_rate);
+    stream.set_baud_rate(modbus.baud_rate);
 
     return Status_OK;
 }
@@ -360,9 +361,10 @@ static void modbus_settings_load (void)
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&modbus, nvs_address, sizeof(modbus_settings_t), true) != NVS_TransferResult_OK)
         modbus_settings_restore();
 
+    is_up = true;
     silence_timeout = silence[get_baudrate(modbus.baud_rate)];
 
-    stream->set_baud_rate(modbus.baud_rate);
+    stream.set_baud_rate(modbus.baud_rate);
 }
 
 static void onReportOptions (bool newopt)
@@ -370,36 +372,65 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.04]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.05]" ASCII_EOL);
 }
 
-bool modbus_init (modbus_stream_t *mstream)
+bool modbus_isup (void)
 {
-    if((nvs_address = nvs_alloc(sizeof(modbus_settings_t)))) {
+    return is_up;
+}
 
-        stream = mstream;
+static bool stream_is_valid (const io_stream_t *stream)
+{
+    return !(stream->set_baud_rate == NULL ||
+              stream->get_tx_buffer_count == NULL ||
+               stream->get_rx_buffer_count == NULL ||
+                stream->write_n == NULL ||
+                 stream->read == NULL ||
+                  stream->reset_write_buffer == NULL ||
+                   stream->reset_read_buffer == NULL);
 
-        if(driver_reset == NULL) {
+}
 
-            driver_reset = hal.driver_reset;
-            hal.driver_reset = modbus_reset;
+static void pos_failed (uint_fast16_t state)
+{
+    report_message("Modbus failed to initialize!", Message_Warning);
+}
 
-            on_execute_realtime = grbl.on_execute_realtime;
-            grbl.on_execute_realtime = modbus_poll;
+modbus_stream_t *modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_direction)
+{
+    if(stream_is_valid(io_stream) && (nvs_address = nvs_alloc(sizeof(modbus_settings_t)))) {
 
-            on_report_options = grbl.on_report_options;
-            grbl.on_report_options = onReportOptions;
+        stream.set_baud_rate = io_stream->set_baud_rate;
+        stream.get_tx_buffer_count = io_stream->get_tx_buffer_count;
+        stream.get_rx_buffer_count = io_stream->get_rx_buffer_count;
+        stream.write = io_stream->write_n;
+        stream.read = io_stream->read;
+        stream.flush_tx_buffer = io_stream->reset_write_buffer;
+        stream.flush_rx_buffer = io_stream->reset_read_buffer;
+        stream.set_direction = set_direction;
 
-            details.on_get_settings = grbl.on_get_settings;
-            grbl.on_get_settings = on_get_settings;
-        }
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = modbus_reset;
+
+        on_execute_realtime = grbl.on_execute_realtime;
+        grbl.on_execute_realtime = modbus_poll;
+
+        on_report_options = grbl.on_report_options;
+        grbl.on_report_options = onReportOptions;
+
+        details.on_get_settings = grbl.on_get_settings;
+        grbl.on_get_settings = on_get_settings;
 
         head = tail = &queue[0];
 
         uint_fast8_t idx;
         for(idx = 0; idx < MODBUS_QUEUE_LENGTH; idx++)
             queue[idx].next = idx == MODBUS_QUEUE_LENGTH - 1 ? &queue[0] : &queue[idx + 1];
+    } else {
+        protocol_enqueue_rt_command(pos_failed);
+        system_raise_alarm(Alarm_SelftestFailed);
     }
 
-    return nvs_address != 0;
+    return nvs_address != 0 ? &stream : NULL;
 }
