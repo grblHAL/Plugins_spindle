@@ -372,7 +372,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.06]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
@@ -388,7 +388,8 @@ static bool stream_is_valid (const io_stream_t *stream)
                 stream->write_n == NULL ||
                  stream->read == NULL ||
                   stream->reset_write_buffer == NULL ||
-                   stream->reset_read_buffer == NULL);
+                   stream->reset_read_buffer == NULL ||
+                    stream->set_enqueue_rt_handler == NULL);
 
 }
 
@@ -400,6 +401,8 @@ static void pos_failed (uint_fast16_t state)
 modbus_stream_t *modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_direction)
 {
     if(stream_is_valid(io_stream) && (nvs_address = nvs_alloc(sizeof(modbus_settings_t)))) {
+
+        io_stream->set_enqueue_rt_handler(stream_buffer_all);
 
         stream.set_baud_rate = io_stream->set_baud_rate;
         stream.get_tx_buffer_count = io_stream->get_tx_buffer_count;
