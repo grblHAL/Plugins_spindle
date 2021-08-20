@@ -142,7 +142,8 @@ void modbus_poll (sys_state_t grbl_state)
 
         case ModBus_TX:
             if(!stream.get_tx_buffer_count()) {
-
+				/* When an auto-direction sense circuit supports higher baudrates is used at slower rates, it can switch during the off time (TXD is high) of some bit sequences.  In some cases (teensy4.1) this can result in garbage characters in the RX buffer after a message is transmitted.  Flushing the buffer prevents these characters from appearing as an RX message. Since Modbus is half-duplex, there should never be valid data recived during a message transmit.*/
+				stream.flush_rx_buffer();
                 state = ModBus_AwaitReply;
 
                 if(stream.set_direction)
