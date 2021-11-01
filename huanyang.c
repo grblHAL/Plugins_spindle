@@ -68,6 +68,14 @@ static uint32_t rpm_max = 0;
 static float rpm_max50 = 3000;
 #endif
 
+static void rx_packet (modbus_message_t *msg);
+static void rx_exception (uint8_t code, void *context);
+
+static const modbus_callbacks_t callbacks = {
+    .on_rx_packet = rx_packet,
+    .on_rx_exception = rx_exception
+};
+
 static void spindleSetRPM (float rpm, bool block)
 {
 
@@ -78,7 +86,7 @@ static void spindleSetRPM (float rpm, bool block)
         uint16_t data = (uint32_t)(rpm) * 10000UL / rpm_max;
 
         modbus_message_t rpm_cmd = {
-            .xx = (void *)VFD_SetRPM,
+            .context = (void *)VFD_SetRPM,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteRegister,
             .adu[2] = 0x10,
@@ -93,7 +101,7 @@ static void spindleSetRPM (float rpm, bool block)
         uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_max50); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
 
         modbus_message_t rpm_cmd = {
-            .xx = (void *)VFD_SetRPM,
+            .context = (void *)VFD_SetRPM,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteCoil,
             .adu[2] = 0x02,
@@ -107,7 +115,7 @@ static void spindleSetRPM (float rpm, bool block)
 
         vfd_state.at_speed = false;
 
-        modbus_send(&rpm_cmd, block);
+        modbus_send(&rpm_cmd, &callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
             rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
@@ -128,7 +136,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
 #if SPINDLE_HUANYANG == 2
 
     modbus_message_t mode_cmd = {
-        .xx = (void *)VFD_SetStatus,
+        .context = (void *)VFD_SetStatus,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x20,
@@ -140,7 +148,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
 #else
 
     modbus_message_t mode_cmd = {
-        .xx = (void *)VFD_SetStatus,
+        .context = (void *)VFD_SetStatus,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x01,
@@ -157,7 +165,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
     vfd_state.on = state.on;
     vfd_state.ccw = state.ccw;
 
-    if(modbus_send(&mode_cmd, true))
+    if(modbus_send(&mode_cmd, &callbacks, true))
         spindleSetRPM(rpm, true);
 }
 
@@ -168,7 +176,7 @@ static spindle_state_t spindleGetState (void)
 #if SPINDLE_HUANYANG == 2
 
     modbus_message_t mode_cmd = {
-        .xx = (void *)VFD_GetRPM,
+        .context = (void *)VFD_GetRPM,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x70,
@@ -182,7 +190,7 @@ static spindle_state_t spindleGetState (void)
 #else
 
     modbus_message_t mode_cmd = {
-        .xx = (void *)VFD_GetRPM,
+        .context = (void *)VFD_GetRPM,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadInputRegisters,
         .adu[2] = 0x03,
@@ -193,7 +201,7 @@ static spindle_state_t spindleGetState (void)
 
 #endif
 
-    modbus_send(&mode_cmd, false); // TODO: add flag for not raising alarm?
+    modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
     return vfd_state; // return previous state as we do not want to wait for the response
 }
@@ -207,7 +215,7 @@ static void rx_packet (modbus_message_t *msg)
 {
     if(!(msg->adu[0] & 0x80)) {
 
-        switch((vfd_response_t)msg->xx) {
+        switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
 #if SPINDLE_HUANYANG == 2
@@ -239,7 +247,7 @@ static void raise_alarm (uint_fast16_t state)
     system_raise_alarm(Alarm_Spindle);
 }
 
-static void rx_exception (uint8_t code)
+static void rx_exception (uint8_t code, void *context)
 {
     protocol_enqueue_rt_command(raise_alarm);
 }
@@ -302,7 +310,7 @@ static void huanyang_settings_changed (settings_t *settings)
         if(!init_ok) {
 
             modbus_message_t cmd = {
-                .xx = (void *)VFD_GetMaxRPM,
+                .context = (void *)VFD_GetMaxRPM,
                 .adu[0] = VFD_ADDRESS,
                 .adu[1] = ModBus_ReadHoldingRegisters,
                 .adu[2] = 0xB0,
@@ -313,13 +321,13 @@ static void huanyang_settings_changed (settings_t *settings)
                 .rx_length = 8
             };
 
-            modbus_send(&cmd, true);
+            modbus_send(&cmd, &callbacks, true);
         }
 #else
         if(!init_ok) {
 
             modbus_message_t cmd = {
-                .xx = (void *)VFD_GetMaxRPM50,
+                .context = (void *)VFD_GetMaxRPM50,
                 .adu[0] = VFD_ADDRESS,
                 .adu[1] = ModBus_ReadCoils,
                 .adu[2] = 0x03,
@@ -328,7 +336,7 @@ static void huanyang_settings_changed (settings_t *settings)
                 .rx_length = 8
             };
 
-            modbus_send(&cmd, true);
+            modbus_send(&cmd, &callbacks, true);
         }
 #endif
     }
@@ -336,17 +344,14 @@ static void huanyang_settings_changed (settings_t *settings)
     init_ok = true;
 }
 
-void huanyang_init (modbus_stream_t *stream)
+void huanyang_init (void)
 {
-    if(stream) {
+    if(modbus_enabled()) {
         settings_changed = hal.settings_changed;
         hal.settings_changed = huanyang_settings_changed;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
-
-        stream->on_rx_packet = rx_packet;
-        stream->on_rx_exception = rx_exception;
 
         if(!hal.driver_cap.dual_spindle)
             huanyang_settings_changed(&settings);

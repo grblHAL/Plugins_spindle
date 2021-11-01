@@ -24,7 +24,6 @@
 #ifndef _MODBUS_H_
 #define _MODBUS_H_
 
-#define MODBUS_ENABLE 1
 #define MODBUS_MAX_ADU_SIZE 10
 #define MODBUS_QUEUE_LENGTH 8
 
@@ -50,11 +49,16 @@ typedef enum {
 } modbus_function_t;
 
 typedef struct {
+    void *context;
     uint8_t tx_length;
     uint8_t rx_length;
-    void *xx;
     char adu[MODBUS_MAX_ADU_SIZE];
 } modbus_message_t;
+
+typedef struct {
+    void (*on_rx_packet)(modbus_message_t *msg);
+    void (*on_rx_exception)(uint8_t code, void *context);
+} modbus_callbacks_t;
 
 typedef void (*stream_set_direction_ptr)(bool tx);
 
@@ -67,14 +71,12 @@ typedef struct {
     stream_read_ptr read;
     flush_stream_buffer_ptr flush_tx_buffer;
     flush_stream_buffer_ptr flush_rx_buffer;
-    // Callbacks
-    void (*on_rx_packet)(modbus_message_t *msg);
-    void (*on_rx_exception)(uint8_t code);
 } modbus_stream_t;
 
-modbus_stream_t *modbus_init (const io_stream_t *stream, stream_set_direction_ptr set_direction);
+bool modbus_init (const io_stream_t *stream, stream_set_direction_ptr set_direction);
 bool modbus_isup (void);
-bool modbus_send (modbus_message_t *msg, bool block);
+bool modbus_enabled (void);
+bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
 modbus_state_t modbus_get_state (void);
 
 #endif

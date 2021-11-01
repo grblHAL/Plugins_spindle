@@ -39,7 +39,7 @@
 
 #include "modbus.h"
 
-void huanyang_init (modbus_stream_t *stream);
+void huanyang_init (void);
 
 #endif // _HUANYANG_H_
 
