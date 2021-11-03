@@ -45,7 +45,10 @@ typedef enum {
     ModBus_WriteCoil = 5,
     ModBus_WriteRegister = 6,
     ModBus_ReadExceptionStatus = 7,
-    ModBus_Diagnostics = 8
+    ModBus_Diagnostics = 8,
+    ModBus_WriteCoils = 15,
+    ModBus_WriteRegisters = 16
+
 } modbus_function_t;
 
 typedef struct {
