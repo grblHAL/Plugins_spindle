@@ -45,11 +45,15 @@ typedef enum {
     ModBus_WriteCoil = 5,
     ModBus_WriteRegister = 6,
     ModBus_ReadExceptionStatus = 7,
-    ModBus_Diagnostics = 8
+    ModBus_Diagnostics = 8,
+    ModBus_WriteCoils = 15,
+    ModBus_WriteRegisters = 16
+
 } modbus_function_t;
 
 typedef struct {
     void *context;
+    bool crc_check;
     uint8_t tx_length;
     uint8_t rx_length;
     char adu[MODBUS_MAX_ADU_SIZE];
