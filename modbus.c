@@ -200,9 +200,27 @@ void modbus_poll (sys_state_t grbl_state)
 
                 char *buf = ((queue_entry_t *)packet)->msg.adu;
 
+                uint16_t rx_len = packet->msg.rx_length;        // store original length for CRC check
+
                 do {
                     *buf++ = stream.read();
                 } while(--packet->msg.rx_length);
+
+                if (packet->msg.crc_check) {
+                    uint_fast16_t crc = modbus_CRC16x(packet->msg.adu, rx_len - 2);
+
+                    if (packet->msg.adu[rx_len-2] != (crc & 0xFF) || packet->msg.adu[rx_len-1] != (crc >>8)) {
+                        // CRC check error
+                        if((state = packet->async ? ModBus_Silent : ModBus_Exception) == ModBus_Silent) {
+                            if(packet->callbacks.on_rx_exception)
+                                packet->callbacks.on_rx_exception(0, packet->msg.context);
+                            packet = NULL;
+                        }
+                        silence_until = ms + silence_timeout;
+                        break;
+                    }
+
+                }
 
                 if((state = packet->async ? ModBus_Silent : ModBus_GotReply) == ModBus_Silent) {
                     if(packet->callbacks.on_rx_packet)

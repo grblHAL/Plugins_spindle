@@ -53,6 +53,7 @@ typedef enum {
 
 typedef struct {
     void *context;
+    bool crc_check;
     uint8_t tx_length;
     uint8_t rx_length;
     char adu[MODBUS_MAX_ADU_SIZE];

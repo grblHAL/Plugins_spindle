@@ -87,6 +87,7 @@ static void spindleSetRPM (float rpm, bool block)
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
+            .crc_check = false,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteRegister,
             .adu[2] = 0x10,
@@ -102,6 +103,7 @@ static void spindleSetRPM (float rpm, bool block)
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
+            .crc_check = false,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteCoil,
             .adu[2] = 0x02,
@@ -137,6 +139,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
+        .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x20,
@@ -149,6 +152,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
+        .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x01,
@@ -177,6 +181,7 @@ static spindle_state_t spindleGetState (void)
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
+        .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x70,
@@ -191,6 +196,7 @@ static spindle_state_t spindleGetState (void)
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
+        .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadInputRegisters,
         .adu[2] = 0x03,
@@ -311,6 +317,7 @@ static void huanyang_settings_changed (settings_t *settings)
 
             modbus_message_t cmd = {
                 .context = (void *)VFD_GetMaxRPM,
+                .crc_check = false,
                 .adu[0] = VFD_ADDRESS,
                 .adu[1] = ModBus_ReadHoldingRegisters,
                 .adu[2] = 0xB0,
@@ -328,6 +335,7 @@ static void huanyang_settings_changed (settings_t *settings)
 
             modbus_message_t cmd = {
                 .context = (void *)VFD_GetMaxRPM50,
+                .crc_check = false,
                 .adu[0] = VFD_ADDRESS,
                 .adu[1] = ModBus_ReadCoils,
                 .adu[2] = 0x03,
