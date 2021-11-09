@@ -1,6 +1,6 @@
 /*
 
-  modbus.c - a lightweigth ModBus implementation
+  modbus.c - a lightweight ModBus implementation
 
   Part of grblHAL
 
@@ -83,7 +83,7 @@ static void modbus_settings_restore (void);
 static void modbus_settings_load (void);
 
 // Compute the MODBUS RTU CRC
-static uint16_t modbus_CRC16x (char *buf, uint_fast16_t len)
+static uint16_t modbus_CRC16x (const char *buf, uint_fast16_t len)
 {
     uint16_t crc = 0xFFFF;
     uint_fast8_t pos, i;
@@ -103,7 +103,7 @@ static uint16_t modbus_CRC16x (char *buf, uint_fast16_t len)
     return crc;
 }
 /*
-static bool valid_crc (char *buf, uint_fast16_t len)
+static bool valid_crc (const char *buf, uint_fast16_t len)
 {
     uint16_t crc = modbus_CRC16x(buf, len - 2);
 
@@ -207,7 +207,7 @@ void modbus_poll (sys_state_t grbl_state)
                 } while(--packet->msg.rx_length);
 
                 if (packet->msg.crc_check) {
-                    uint_fast16_t crc = modbus_CRC16x(packet->msg.adu, rx_len - 2);
+                    uint_fast16_t crc = modbus_CRC16x(((queue_entry_t *)packet)->msg.adu, rx_len - 2);
 
                     if (packet->msg.adu[rx_len-2] != (crc & 0xFF) || packet->msg.adu[rx_len-1] != (crc >>8)) {
                         // CRC check error
@@ -500,6 +500,11 @@ bool modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_dir
 
         details.on_get_settings = grbl.on_get_settings;
         grbl.on_get_settings = on_get_settings;
+
+        if(hal.periph_port.set_pin_description) {
+            hal.periph_port.set_pin_description(Output_TX, io_stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+            hal.periph_port.set_pin_description(Input_RX, io_stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+        }
 
         head = tail = &queue[0];
 

@@ -1,6 +1,6 @@
 /*
 
-  modbus.h - a lightweigth ModBus implementation
+  modbus.h - a lightweight ModBus implementation
 
   Part of grblHAL
 
@@ -24,8 +24,12 @@
 #ifndef _MODBUS_H_
 #define _MODBUS_H_
 
+#ifndef MODBUS_MAX_ADU_SIZE
 #define MODBUS_MAX_ADU_SIZE 10
+#endif
+#ifndef MODBUS_QUEUE_LENGTH
 #define MODBUS_QUEUE_LENGTH 8
+#endif
 
 typedef enum {
     ModBus_Idle,
