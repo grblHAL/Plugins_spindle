@@ -63,6 +63,7 @@ static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
 static settings_changed_ptr settings_changed;
 static on_report_options_ptr on_report_options;
+static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 #if SPINDLE_HUANYANG == 1
 static float rpm_max50 = 3000;
@@ -75,6 +76,39 @@ static const modbus_callbacks_t callbacks = {
     .on_rx_packet = rx_packet,
     .on_rx_exception = rx_exception
 };
+
+// Read maximum configured RPM from spindle, value is used later for calculating current RPM
+// In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
+static void spindleGetMaxRPM (void)
+{
+#if SPINDLE_HUANYANG == 2
+    modbus_message_t cmd = {
+        .context = (void *)VFD_GetMaxRPM,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_ReadHoldingRegisters,
+        .adu[2] = 0xB0,
+        .adu[3] = 0x05,
+        .adu[4] = 0x00,
+        .adu[5] = 0x02,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    modbus_send(&cmd, &callbacks, true);
+#else
+    modbus_message_t cmd = {
+        .context = (void *)VFD_GetMaxRPM50,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_ReadCoils,
+        .adu[2] = 0x03,
+        .adu[3] = 0x90, // PD144
+        .adu[4] = 0x00,
+        .adu[5] = 0x00,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    modbus_send(&cmd, &callbacks, true);
+#endif
+}
 
 static void spindleSetRPM (float rpm, bool block)
 {
@@ -255,7 +289,12 @@ static void raise_alarm (uint_fast16_t state)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    protocol_enqueue_rt_command(raise_alarm);
+    // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
+    // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
+    if (!sys.cold_start)
+        raise_alarm(Alarm_Spindle);
+    else
+        protocol_enqueue_rt_command(raise_alarm);
 }
 
 static void onReportOptions (bool newopt)
@@ -269,6 +308,12 @@ static void onReportOptions (bool newopt)
         hal.stream.write("[PLUGIN:HUANYANG VFD v0.03]" ASCII_EOL);
 #endif
     }
+}
+
+static void huanyang_reset (void)
+{
+    driver_reset();
+    spindleGetMaxRPM();
 }
 
 static void huanyang_settings_changed (settings_t *settings)
@@ -311,42 +356,7 @@ static void huanyang_settings_changed (settings_t *settings)
             hal.driver_cap.spindle_at_speed = On;
             hal.driver_cap.spindle_dir = On;
         }
-
-#if SPINDLE_HUANYANG == 2
-        if(!init_ok) {
-
-            modbus_message_t cmd = {
-                .context = (void *)VFD_GetMaxRPM,
-                .crc_check = false,
-                .adu[0] = VFD_ADDRESS,
-                .adu[1] = ModBus_ReadHoldingRegisters,
-                .adu[2] = 0xB0,
-                .adu[3] = 0x05,
-                .adu[4] = 0x00,
-                .adu[5] = 0x02,
-                .tx_length = 8,
-                .rx_length = 8
-            };
-
-            modbus_send(&cmd, &callbacks, true);
-        }
-#else
-        if(!init_ok) {
-
-            modbus_message_t cmd = {
-                .context = (void *)VFD_GetMaxRPM50,
-                .crc_check = false,
-                .adu[0] = VFD_ADDRESS,
-                .adu[1] = ModBus_ReadCoils,
-                .adu[2] = 0x03,
-                .adu[3] = 122,
-                .tx_length = 8,
-                .rx_length = 8
-            };
-
-            modbus_send(&cmd, &callbacks, true);
-        }
-#endif
+        spindleGetMaxRPM();
     }
 
     init_ok = true;
@@ -360,6 +370,9 @@ void huanyang_init (void)
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
+
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = huanyang_reset;
 
         if(!hal.driver_cap.dual_spindle)
             huanyang_settings_changed(&settings);
