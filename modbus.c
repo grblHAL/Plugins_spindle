@@ -58,7 +58,13 @@ typedef struct queue_entry {
 } queue_entry_t;
 
 static const uint32_t baud[]    = { 2400, 4800, 9600, 19200, 38400, 115200 };
+
+// Testing Huanyang VFDs (with other devices on the bus) has shown failure to respond if silent period is < 6ms
+#if HUANYANG_ENABLE == 1
+static const uint16_t silence[] = {   16,    8,    6,     6,     6,      6 };
+#else
 static const uint16_t silence[] = {   16,    8,    4,     2,     2,      2 };
+#endif
 
 static modbus_stream_t stream;
 static uint32_t rx_timeout = 0, silence_until = 0, silence_timeout;
