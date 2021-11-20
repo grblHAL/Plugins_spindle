@@ -61,7 +61,9 @@ typedef enum {
     VFD_GetMaxRPM,
     VFD_GetMaxRPM50,
     VFD_GetStatus,
-    VFD_SetStatus
+    VFD_SetStatus,
+    VFD_GetAmps,
+    VFD_GetVolts
 } vfd_response_t;
 
 static float rpm_programmed = -1.0f, rpm_low_limit = 0.0f, rpm_high_limit = 0.0f;
@@ -230,24 +232,55 @@ static spindle_state_t spindleGetState (void)
         .adu[5] = 0x02,
         .tx_length = 8,
         .rx_length = 8
+
+        modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
     };
 
 #else
 
-    modbus_message_t mode_cmd = {
+    modbus_message_t rpm_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadInputRegisters,
         .adu[2] = 0x03,
-        .adu[3] = 0x01,
+        .adu[3] = 0x01,     // Output frequency
         .tx_length = 8,
         .rx_length = 8
     };
+    modbus_send(&rpm_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
+
+#ifdef SPINDLE_POWER_DATA
+
+    // Can't seem to request multiple registers at once, so queue up requests for voltage & current
+    modbus_message_t volts_cmd = {
+        .context = (void *)VFD_GetVolts,
+        .crc_check = false,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_ReadInputRegisters,
+        .adu[2] = 0x03,
+        .adu[3] = 0x05,     // AC voltage * 10
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    modbus_send(&volts_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
+
+    modbus_message_t amps_cmd = {
+        .context = (void *)VFD_GetAmps,
+        .crc_check = false,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_ReadInputRegisters,
+        .adu[2] = 0x03,
+        .adu[3] = 0x02,     // Output amps * 10
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    modbus_send(&amps_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
 #endif
 
-    modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
+#endif
+
 
     return vfd_state; // return previous state as we do not want to wait for the response
 }
@@ -270,6 +303,18 @@ static void rx_packet (modbus_message_t *msg)
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * (float)rpm_max50 / 5000.0f;
 #endif
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= rpm_low_limit && spindle_data.rpm <= rpm_high_limit);
+                break;
+
+            case VFD_GetVolts:
+                spindle_data.volts = (float)((msg->adu[4] << 8) | msg->adu[5]) / 10.0f;
+                break;
+
+            case VFD_GetAmps:
+                spindle_data.amps = (float)((msg->adu[4] << 8) | msg->adu[5]) / 10.0f;
+
+                // How does Huangyang VFD report it's output power, is it per phase or total?
+                // Spec table in the manual implies total power (i.e. the 220V 1.5KW model lists 7A output current), so assume A * V
+                spindle_data.kw = (spindle_data.amps * spindle_data.volts) / 1000.0f;
                 break;
 
             case VFD_GetMaxRPM:
