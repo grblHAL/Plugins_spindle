@@ -87,7 +87,7 @@ static const modbus_callbacks_t callbacks = {
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
 static void spindleGetMaxRPM (void)
 {
-#if SPINDLE_HUANYANG == 2
+#if HUANYANG_ENABLE == 2
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM,
         .adu[0] = VFD_ADDRESS,
@@ -309,9 +309,9 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if HUANYANG_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.04]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.05]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.04]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.05]" ASCII_EOL);
 #endif
     }
 }
@@ -355,7 +355,8 @@ static void huanyang_settings_changed (settings_t *settings)
                 memcpy(&spindle_org, &hal.spindle, sizeof(spindle_ptrs_t));
             }
 
-            spindle_org.set_state((spindle_state_t){0}, 0.0f);
+            if(spindle_org.set_state)
+                spindle_org.set_state((spindle_state_t){0}, 0.0f);
 
             hal.spindle.set_state = spindleSetState;
             hal.spindle.get_state = spindleGetState;
