@@ -49,6 +49,13 @@
 
 #define DEFAULT_BAUDRATE 3 // 19200
 
+#ifndef MODBUS_SERIAL_PORT
+#define MODBUS_SERIAL_PORT -1
+#endif
+#ifndef MODBUS_DIR_AUX
+#define MODBUS_DIR_AUX    -1
+#endif
+
 typedef struct queue_entry {
     bool async;
     bool sent;
@@ -374,7 +381,7 @@ static void modbus_settings_save (void)
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&modbus, sizeof(modbus_settings_t), true);
 }
 
-static setting_details_t details = {
+static setting_details_t setting_details = {
     .groups = modbus_groups,
     .n_groups = sizeof(modbus_groups) / sizeof(setting_group_detail_t),
     .settings = modbus_settings,
@@ -383,11 +390,6 @@ static setting_details_t details = {
     .load = modbus_settings_load,
     .restore = modbus_settings_restore
 };
-
-static setting_details_t *on_get_settings (void)
-{
-    return &details;
-}
 
 static status_code_t modbus_set_baud (setting_id_t id, uint_fast16_t value)
 {
@@ -427,7 +429,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.09]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
@@ -442,15 +444,15 @@ bool modbus_enabled (void)
 
 static bool stream_is_valid (const io_stream_t *stream)
 {
-    return !(stream->set_baud_rate == NULL ||
-              stream->get_tx_buffer_count == NULL ||
-               stream->get_rx_buffer_count == NULL ||
-                stream->write_n == NULL ||
-                 stream->read == NULL ||
-                  stream->reset_write_buffer == NULL ||
-                   stream->reset_read_buffer == NULL ||
-                    stream->set_enqueue_rt_handler == NULL);
-
+    return stream &&
+            !(stream->set_baud_rate == NULL ||
+               stream->get_tx_buffer_count == NULL ||
+                stream->get_rx_buffer_count == NULL ||
+                 stream->write_n == NULL ||
+                  stream->read == NULL ||
+                   stream->reset_write_buffer == NULL ||
+                    stream->reset_read_buffer == NULL ||
+                     stream->set_enqueue_rt_handler == NULL);
 }
 
 static void pos_failed (uint_fast16_t state)
@@ -465,35 +467,61 @@ static void modbus_set_direction (bool tx)
 }
 #endif
 
-bool modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_direction)
+static bool claim_stream (io_stream_properties_t const *sstream)
 {
+    io_stream_t const *claimed = NULL;
+
+#if MODBUS_SERIAL_PORT >= 0
+    if(sstream->type == StreamType_Serial && sstream->instance == MODBUS_SERIAL_PORT) {
+#else
+    if(sstream->type == StreamType_Serial && sstream->flags.modbus_ready && !sstream->flags.claimed) {
+#endif
+        if((claimed = sstream->claim(baud[DEFAULT_BAUDRATE])) && stream_is_valid(claimed)) {
+
+            claimed->set_enqueue_rt_handler(stream_buffer_all);
+
+            stream.set_baud_rate = claimed->set_baud_rate;
+            stream.get_tx_buffer_count = claimed->get_tx_buffer_count;
+            stream.get_rx_buffer_count = claimed->get_rx_buffer_count;
+            stream.write = claimed->write_n;
+            stream.read = claimed->read;
+            stream.flush_tx_buffer = claimed->reset_write_buffer;
+            stream.flush_rx_buffer = claimed->reset_read_buffer;
 #if MODBUS_ENABLE == 2
-        if(set_direction == NULL && hal.port.num_digital_out > 0) {
-
-            dir_port = (--hal.port.num_digital_out);
-            set_direction = modbus_set_direction;
-
-            if(hal.port.set_pin_description)
-                hal.port.set_pin_description(Port_Digital, Port_Output, dir_port, "Modbus RX/TX direction");
-        } else {
-            protocol_enqueue_rt_command(pos_failed);
-            system_raise_alarm(Alarm_SelftestFailed);
-            return false;
+            stream.set_direction = modbus_set_direction;
+#endif
+            if(hal.periph_port.set_pin_description) {
+                hal.periph_port.set_pin_description(Output_TX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+                hal.periph_port.set_pin_description(Input_RX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+            }
         }
+    }
+
+    return claimed != NULL;
+}
+
+void modbus_init (void)
+{
+
+#if MODBUS_ENABLE == 2
+
+    uint8_t n_out = ioports_available(Port_Digital, Port_Output);
+
+  #if MODBUS_DIR_AUX >= 0
+    dir_port = MODBUS_DIR_AUX;
+  #else
+    dir_port = n_out - 1;
+  #endif
+
+    if(!(n_out > dir_port && ioport_claim(Port_Digital, Port_Output, &dir_port, "Modbus RX/TX direction"))) {
+        protocol_enqueue_rt_command(pos_failed);
+        system_raise_alarm(Alarm_SelftestFailed);
+        return;
+    }
+
 #endif
 
-    if(stream_is_valid(io_stream) && (nvs_address = nvs_alloc(sizeof(modbus_settings_t)))) {
-
-        io_stream->set_enqueue_rt_handler(stream_buffer_all);
-
-        stream.set_baud_rate = io_stream->set_baud_rate;
-        stream.get_tx_buffer_count = io_stream->get_tx_buffer_count;
-        stream.get_rx_buffer_count = io_stream->get_rx_buffer_count;
-        stream.write = io_stream->write_n;
-        stream.read = io_stream->read;
-        stream.flush_tx_buffer = io_stream->reset_write_buffer;
-        stream.flush_rx_buffer = io_stream->reset_read_buffer;
-        stream.set_direction = set_direction;
+    if(stream_enumerate_streams(claim_stream) && (nvs_address = nvs_alloc(sizeof(modbus_settings_t)))) {
 
         driver_reset = hal.driver_reset;
         hal.driver_reset = modbus_reset;
@@ -504,13 +532,7 @@ bool modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_dir
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
-        details.on_get_settings = grbl.on_get_settings;
-        grbl.on_get_settings = on_get_settings;
-
-        if(hal.periph_port.set_pin_description) {
-            hal.periph_port.set_pin_description(Output_TX, io_stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
-            hal.periph_port.set_pin_description(Input_RX, io_stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
-        }
+        settings_register(&setting_details);
 
         head = tail = &queue[0];
 
@@ -522,8 +544,6 @@ bool modbus_init (const io_stream_t *io_stream, stream_set_direction_ptr set_dir
         protocol_enqueue_rt_command(pos_failed);
         system_raise_alarm(Alarm_SelftestFailed);
     }
-
-    return nvs_address != 0;
 }
 
 #endif

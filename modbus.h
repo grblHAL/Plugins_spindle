@@ -81,7 +81,7 @@ typedef struct {
     flush_stream_buffer_ptr flush_rx_buffer;
 } modbus_stream_t;
 
-bool modbus_init (const io_stream_t *stream, stream_set_direction_ptr set_direction);
+void modbus_init (void);
 bool modbus_isup (void);
 bool modbus_enabled (void);
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
