@@ -491,8 +491,8 @@ static bool claim_stream (io_stream_properties_t const *sstream)
             stream.set_direction = modbus_set_direction;
 #endif
             if(hal.periph_port.set_pin_description) {
-                hal.periph_port.set_pin_description(Output_TX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
-                hal.periph_port.set_pin_description(Input_RX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+                hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
+                hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
             }
         }
     }

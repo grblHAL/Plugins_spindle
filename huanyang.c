@@ -27,7 +27,7 @@
 #include "driver.h"
 #endif
 
-#if HUANYANG_ENABLE
+#if VFD_ENABLE == 1 || VFD_ENABLE == 2
 
 #include <math.h>
 #include <string.h>
@@ -71,7 +71,7 @@ static settings_changed_ptr settings_changed;
 static on_report_options_ptr on_report_options;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
-#if HUANYANG_ENABLE == 1
+#if VFD_ENABLE == 1
 static float rpm_max50 = 3000;
 #endif
 
@@ -87,7 +87,7 @@ static const modbus_callbacks_t callbacks = {
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
 static void spindleGetMaxRPM (void)
 {
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM,
         .adu[0] = VFD_ADDRESS,
@@ -121,7 +121,7 @@ static void spindleSetRPM (float rpm, bool block)
 
     if (rpm != rpm_programmed) {
 
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
         uint16_t data = (uint32_t)(rpm) * 10000UL / rpm_max;
 
@@ -175,7 +175,7 @@ static void spindleUpdateRPM (float rpm)
 // Start or stop spindle
 static void spindleSetState (spindle_state_t state, float rpm)
 {
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
@@ -217,7 +217,7 @@ static void spindleSetState (spindle_state_t state, float rpm)
 static spindle_state_t spindleGetState (void)
 {
 
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
@@ -264,7 +264,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]);
 #else
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * (float)rpm_max50 / 5000.0f;
@@ -276,7 +276,7 @@ static void rx_packet (modbus_message_t *msg)
                 rpm_max = (msg->adu[4] << 8) | msg->adu[5];
                 break;
 
-#if HUANYANG_ENABLE == 1
+#if VFD_ENABLE == 1
             case VFD_GetMaxRPM50:
                 rpm_max50 = (msg->adu[4] << 8) | msg->adu[5];
                 break;
@@ -308,7 +308,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
         hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.05]" ASCII_EOL);
 #else
         hal.stream.write("[PLUGIN:HUANYANG VFD v0.05]" ASCII_EOL);
@@ -378,7 +378,7 @@ static void huanyang_settings_changed (settings_t *settings)
     }
 }
 
-void huanyang_init (void)
+void vfd_init (void)
 {
     if(modbus_enabled()) {
         settings_changed = hal.settings_changed;
