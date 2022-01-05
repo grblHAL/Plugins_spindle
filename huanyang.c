@@ -64,7 +64,7 @@ typedef enum {
     VFD_SetStatus
 } vfd_response_t;
 
-static float rpm_programmed = -1.0f, rpm_low_limit = 0.0f, rpm_high_limit = 0.0f;
+static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
 static settings_changed_ptr settings_changed;
@@ -160,8 +160,8 @@ static void spindleSetRPM (float rpm, bool block)
         modbus_send(&rpm_cmd, &callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-            rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
-            rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
         }
         rpm_programmed = rpm;
     }
@@ -213,6 +213,11 @@ static void spindleSetState (spindle_state_t state, float rpm)
         spindleSetRPM(rpm, true);
 }
 
+static spindle_data_t *spindleGetData (spindle_data_request_t request)
+{
+    return &spindle_data;
+}
+
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (void)
 {
@@ -249,12 +254,13 @@ static spindle_state_t spindleGetState (void)
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
-    return vfd_state; // return previous state as we do not want to wait for the response
-}
+    // Get the actual RPM from spindle encoder input when available.
+    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
+        float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
+        vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
+    }
 
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
-{
-    return &spindle_data;
+    return vfd_state; // return previous state as we do not want to wait for the response
 }
 
 static void rx_packet (modbus_message_t *msg)
@@ -269,7 +275,7 @@ static void rx_packet (modbus_message_t *msg)
 #else
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * (float)rpm_max50 / 5000.0f;
 #endif
-                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= rpm_low_limit && spindle_data.rpm <= rpm_high_limit);
+                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 break;
 
             case VFD_GetMaxRPM:
@@ -309,9 +315,9 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if VFD_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.06]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.06]" ASCII_EOL);
 #endif
     }
 }
