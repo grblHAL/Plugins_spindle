@@ -67,8 +67,8 @@ typedef enum {
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static settings_changed_ptr settings_changed;
 static on_report_options_ptr on_report_options;
+static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 #if VFD_ENABLE == 1
@@ -315,9 +315,9 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if VFD_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.06]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.07]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.06]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
 #endif
     }
 }
@@ -328,33 +328,31 @@ static void huanyang_reset (void)
     spindleGetMaxRPM();
 }
 
-static void huanyang_settings_changed (settings_t *settings)
+bool huanyang_spindle_select (uint_fast8_t spindle_id)
 {
     static bool init_ok = false, vfd_active = false;
     static driver_cap_t driver_cap;
     static spindle_ptrs_t spindle_org;
 
-    if(settings_changed)
-        settings_changed(settings);
+    if(vfd_active && spindle_id != 1 && spindle_org.set_state != NULL) {
+
+        vfd_active = false;
+
+        gc_spindle_off();
+
+        hal.driver_cap = driver_cap;
+        memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
+    }
+
+    if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;
 
     if(!modbus_isup())
-        return;
+        return false;
 
-    if(hal.driver_cap.dual_spindle && settings->mode == Mode_Laser) {
-        if(vfd_active) {
-
-            vfd_active = false;
-
-            hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-
-            hal.driver_cap = driver_cap;
-            memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
-        }
-    } else {
+    if((vfd_active = spindle_id == 1)) {
 
         if(hal.spindle.set_state != spindleSetState) {
-
-            vfd_active = true;
 
             if(spindle_org.set_state == NULL) {
                 driver_cap = hal.driver_cap;
@@ -362,7 +360,7 @@ static void huanyang_settings_changed (settings_t *settings)
             }
 
             if(spindle_org.set_state)
-                spindle_org.set_state((spindle_state_t){0}, 0.0f);
+                gc_spindle_off();
 
             hal.spindle.set_state = spindleSetState;
             hal.spindle.get_state = spindleGetState;
@@ -374,7 +372,7 @@ static void huanyang_settings_changed (settings_t *settings)
             hal.driver_cap.spindle_dir = On;
         }
 
-        if(settings->spindle.ppr == 0)
+        if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
 
         if(!init_ok) {
@@ -382,22 +380,22 @@ static void huanyang_settings_changed (settings_t *settings)
             spindleGetMaxRPM();
         }
     }
+
+    return true;
 }
 
 void vfd_init (void)
 {
     if(modbus_enabled()) {
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = huanyang_settings_changed;
+
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = huanyang_spindle_select;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
         driver_reset = hal.driver_reset;
         hal.driver_reset = huanyang_reset;
-
-        if(!hal.driver_cap.dual_spindle)
-            huanyang_settings_changed(&settings);
     }
 }
 
