@@ -54,45 +54,6 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-/* Read Registers:
-	0x2100 = status word 1
-	0x2101 = status word 2
-	0x2102 = frequency command
-	0x2103 = actual frequency
-	0x2104 = output current
-	0x2105 = DC bus voltage
-	0x2106 = actual output voltage
-	0x2107 = actual RPM
-	0x2108 + 0x2109 = scale freq (not sure what this actually is - it's the same as 0x2103)
-	0x210A = power factor.  Not sure of the units (1/10 or 1/100)
-	0x210B = load percentage
-	0x210C = Firmware revision (never saw anything other than 0 here)
-	total of 13 registers		*/
-#define START_REGISTER_R	0x2100
-#define NUM_REGISTERS_R		13
-/* write registers:
-	0x91A = Speed reference, in 1/10Hz increments
-	0x91B = RUN command, 0=stop, 1=run
-	0x91C = direction, 0=forward, 1=reverse
-	0x91D = serial fault, 0=no fault, 1=fault (maybe can stop with this?)
-	0x91E = serial fault reset, 0=no reset, 1 = reset fault
-	total of 5 registers */
-#define START_REGISTER_W	0x091A
-#define NUM_REGISTERS_W		5
-
-
-#define GS2_REG_STOP_METHOD                             0x0100
-#define GS2_REG_STOP_METHOD__RAMP_TO_STOP               0
-#define GS2_REG_STOP_METHOD__COAST_TO_STOP              1
-
-#define GS2_REG_ACCELERATION_TIME_1                     0x0101
-
-#define GS2_REG_DECELERATION_TIME_1                     0x0102
-
-#define GS2_REG_OVER_VOLTAGE_STALL_PREVENTION           0x0605
-#define GS2_REG_OVER_VOLTAGE_STALL_PREVENTION__ENABLE   0
-#define GS2_REG_OVER_VOLTAGE_STALL_PREVENTION__DISABLE  1
-
 #define MOTOR_RPM_HZ		60
 
 typedef enum {
@@ -103,7 +64,6 @@ typedef enum {
     VFD_GetMaxRPM50,
     VFD_GetStatus,
     VFD_SetStatus,
-    VFD_SetAccelTime
 } vfd_response_t;
 
 static float rpm_programmed = -1.0f;
@@ -113,7 +73,6 @@ static on_report_options_ptr on_report_options;
 static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
-static uint8_t poles = 2;
 
 static void rx_packet (modbus_message_t *msg);
 static void rx_exception (uint8_t code, void *context);
@@ -123,8 +82,7 @@ static const modbus_callbacks_t callbacks = {
     .on_rx_exception = rx_exception
 };
 
-// Read maximum configured RPM from spindle, value is used later for calculating current RPM
-// In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
+// To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
 static void spindleGetMaxRPM (void)
 {
     modbus_message_t cmd;
@@ -161,8 +119,6 @@ static void spindleSetRPM (float rpm, bool block)
     if (rpm != rpm_programmed) {
 
         uint16_t data = ((uint32_t)(rpm)*50) / MOTOR_RPM_HZ;
-
-        //data = data*10;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
