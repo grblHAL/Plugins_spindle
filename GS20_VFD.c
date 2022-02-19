@@ -1,6 +1,6 @@
 /*
 
-  huanyang.c - Huanyang VFD spindle support
+  GS20_VFD.c - Durapulse GS20 VFD spindle support
 
   Part of grblHAL
 
