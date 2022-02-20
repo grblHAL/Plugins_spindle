@@ -1,5 +1,7 @@
 ## Spindle plugins
 
+Added Durapulse GS20 support.
+
 This plugin adds support for Huanyang VFD spindles via ModBus (RS485).
 
 Switching between Modbus VDF spindle and PWM output is possible via a M-code, currently `M104`: `M104P0` for PWM (laser) and `M104P1` for VFD.  
