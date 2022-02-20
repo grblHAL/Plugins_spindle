@@ -86,7 +86,7 @@ static uint8_t dir_port;
 #endif
 
 static driver_reset_ptr driver_reset;
-static on_execute_realtime_ptr on_execute_realtime;
+static on_execute_realtime_ptr on_execute_realtime, on_execute_delay;
 static on_report_options_ptr on_report_options;
 static nvs_address_t nvs_address;
 
@@ -136,13 +136,9 @@ static inline void add_message (queue_entry_t *packet, modbus_message_t *msg, co
     }
 }
 
-void modbus_poll (sys_state_t grbl_state)
+static void modbus_poll (void)
 {
     static uint32_t last_ms;
-
-    UNUSED(grbl_state);
-
-    on_execute_realtime(grbl_state);
 
     uint32_t ms = hal.get_elapsed_ticks();
 
@@ -251,6 +247,20 @@ void modbus_poll (sys_state_t grbl_state)
 
     last_ms = ms;
     spin_lock = false;
+}
+
+static void modbus_poll_realtime (sys_state_t grbl_state)
+{
+    on_execute_realtime(grbl_state);
+
+    modbus_poll();
+}
+
+static void modbus_poll_delay (sys_state_t grbl_state)
+{
+    on_execute_delay(grbl_state);
+
+    modbus_poll();
 }
 
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block)
@@ -429,7 +439,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.09]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.10]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
@@ -491,14 +501,51 @@ static bool claim_stream (io_stream_properties_t const *sstream)
             stream.set_direction = modbus_set_direction;
 #endif
             if(hal.periph_port.set_pin_description) {
-                hal.periph_port.set_pin_description(Output_TX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
-                hal.periph_port.set_pin_description(Input_RX, claimed->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Modbus");
+                hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
+                hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
             }
         }
     }
 
     return claimed != NULL;
 }
+
+#if VFD_ENABLE
+
+// Dummy spindle, installed if modbus_init() fails.
+
+static settings_changed_ptr settings_changed;
+
+static void spindleUpdateRPM (float rpm)
+{
+}
+
+static void spindleSetState (spindle_state_t state, float rpm)
+{
+}
+
+static spindle_state_t spindleGetState (void)
+{
+    return (spindle_state_t){0};
+}
+
+static void _settings_changed (settings_t *settings)
+{
+    if(settings_changed)
+        settings_changed(settings);
+
+    if(hal.spindle.set_state == NULL) {
+        hal.spindle.set_state = spindleSetState;
+        hal.spindle.get_state = spindleGetState;
+        hal.spindle.update_rpm = spindleUpdateRPM;
+        hal.spindle.reset_data = NULL;
+        hal.driver_cap.variable_spindle = Off;
+        hal.driver_cap.spindle_at_speed = Off;
+        hal.driver_cap.spindle_dir = Off;
+    }
+}
+
+#endif
 
 void modbus_init (void)
 {
@@ -527,7 +574,10 @@ void modbus_init (void)
         hal.driver_reset = modbus_reset;
 
         on_execute_realtime = grbl.on_execute_realtime;
-        grbl.on_execute_realtime = modbus_poll;
+        grbl.on_execute_realtime = modbus_poll_realtime;
+
+        on_execute_delay = grbl.on_execute_delay;
+        grbl.on_execute_delay = modbus_poll_delay;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
@@ -541,6 +591,11 @@ void modbus_init (void)
             queue[idx].next = idx == MODBUS_QUEUE_LENGTH - 1 ? &queue[0] : &queue[idx + 1];
 
     } else {
+
+#if VFD_ENABLE
+        settings_changed = hal.settings_changed;
+        hal.settings_changed = _settings_changed;
+#endif
         protocol_enqueue_rt_command(pos_failed);
         system_raise_alarm(Alarm_SelftestFailed);
     }
