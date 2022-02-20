@@ -27,7 +27,7 @@
 #include "driver.h"
 #endif
 
-#if HUANYANG_ENABLE
+#if VFD_ENABLE == 1 || VFD_ENABLE == 2
 
 #include <math.h>
 #include <string.h>
@@ -64,14 +64,14 @@ typedef enum {
     VFD_SetStatus
 } vfd_response_t;
 
-static float rpm_programmed = -1.0f, rpm_low_limit = 0.0f, rpm_high_limit = 0.0f;
+static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static settings_changed_ptr settings_changed;
 static on_report_options_ptr on_report_options;
+static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
-#if HUANYANG_ENABLE == 1
+#if VFD_ENABLE == 1
 static float rpm_max50 = 3000;
 #endif
 
@@ -87,7 +87,7 @@ static const modbus_callbacks_t callbacks = {
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
 static void spindleGetMaxRPM (void)
 {
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM,
         .adu[0] = VFD_ADDRESS,
@@ -121,7 +121,7 @@ static void spindleSetRPM (float rpm, bool block)
 
     if (rpm != rpm_programmed) {
 
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
         uint16_t data = (uint32_t)(rpm) * 10000UL / rpm_max;
 
@@ -160,8 +160,8 @@ static void spindleSetRPM (float rpm, bool block)
         modbus_send(&rpm_cmd, &callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-            rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
-            rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
         }
         rpm_programmed = rpm;
     }
@@ -175,7 +175,7 @@ static void spindleUpdateRPM (float rpm)
 // Start or stop spindle
 static void spindleSetState (spindle_state_t state, float rpm)
 {
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
@@ -213,11 +213,16 @@ static void spindleSetState (spindle_state_t state, float rpm)
         spindleSetRPM(rpm, true);
 }
 
+static spindle_data_t *spindleGetData (spindle_data_request_t request)
+{
+    return &spindle_data;
+}
+
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (void)
 {
 
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
@@ -249,12 +254,13 @@ static spindle_state_t spindleGetState (void)
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
-    return vfd_state; // return previous state as we do not want to wait for the response
-}
+    // Get the actual RPM from spindle encoder input when available.
+    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
+        float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
+        vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
+    }
 
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
-{
-    return &spindle_data;
+    return vfd_state; // return previous state as we do not want to wait for the response
 }
 
 static void rx_packet (modbus_message_t *msg)
@@ -264,19 +270,19 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-#if HUANYANG_ENABLE == 2
+#if VFD_ENABLE == 2
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]);
 #else
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * (float)rpm_max50 / 5000.0f;
 #endif
-                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= rpm_low_limit && spindle_data.rpm <= rpm_high_limit);
+                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 break;
 
             case VFD_GetMaxRPM:
                 rpm_max = (msg->adu[4] << 8) | msg->adu[5];
                 break;
 
-#if HUANYANG_ENABLE == 1
+#if VFD_ENABLE == 1
             case VFD_GetMaxRPM50:
                 rpm_max50 = (msg->adu[4] << 8) | msg->adu[5];
                 break;
@@ -308,10 +314,10 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-#if HUANYANG_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.05]" ASCII_EOL);
+#if VFD_ENABLE == 2
+        hal.stream.write("[PLUGIN:HUANYANG VFD P2A v0.07]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
 #endif
     }
 }
@@ -322,33 +328,31 @@ static void huanyang_reset (void)
     spindleGetMaxRPM();
 }
 
-static void huanyang_settings_changed (settings_t *settings)
+bool huanyang_spindle_select (uint_fast8_t spindle_id)
 {
     static bool init_ok = false, vfd_active = false;
     static driver_cap_t driver_cap;
     static spindle_ptrs_t spindle_org;
 
-    if(settings_changed)
-        settings_changed(settings);
+    if(vfd_active && spindle_id != 1 && spindle_org.set_state != NULL) {
+
+        vfd_active = false;
+
+        gc_spindle_off();
+
+        hal.driver_cap = driver_cap;
+        memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
+    }
+
+    if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;
 
     if(!modbus_isup())
-        return;
+        return false;
 
-    if(hal.driver_cap.dual_spindle && settings->mode == Mode_Laser) {
-        if(vfd_active) {
-
-            vfd_active = false;
-
-            hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-
-            hal.driver_cap = driver_cap;
-            memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
-        }
-    } else {
+    if((vfd_active = spindle_id == 1)) {
 
         if(hal.spindle.set_state != spindleSetState) {
-
-            vfd_active = true;
 
             if(spindle_org.set_state == NULL) {
                 driver_cap = hal.driver_cap;
@@ -356,7 +360,7 @@ static void huanyang_settings_changed (settings_t *settings)
             }
 
             if(spindle_org.set_state)
-                spindle_org.set_state((spindle_state_t){0}, 0.0f);
+                gc_spindle_off();
 
             hal.spindle.set_state = spindleSetState;
             hal.spindle.get_state = spindleGetState;
@@ -368,7 +372,7 @@ static void huanyang_settings_changed (settings_t *settings)
             hal.driver_cap.spindle_dir = On;
         }
 
-        if(settings->spindle.ppr == 0)
+        if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
 
         if(!init_ok) {
@@ -376,22 +380,22 @@ static void huanyang_settings_changed (settings_t *settings)
             spindleGetMaxRPM();
         }
     }
+
+    return true;
 }
 
-void huanyang_init (void)
+void vfd_init (void)
 {
     if(modbus_enabled()) {
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = huanyang_settings_changed;
+
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = huanyang_spindle_select;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
         driver_reset = hal.driver_reset;
         hal.driver_reset = huanyang_reset;
-
-        if(!hal.driver_cap.dual_spindle)
-            huanyang_settings_changed(&settings);
     }
 }
 
