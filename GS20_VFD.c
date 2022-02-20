@@ -1,6 +1,6 @@
 /*
 
-  GS20_VFD.c - Durapulse GS20 VFD spindle support
+  GS.c - Huanyang VFD spindle support
 
   Part of grblHAL
 
@@ -55,6 +55,8 @@
 #endif
 
 #define MOTOR_RPM_HZ		60
+#define RETRIES     		25
+#define RETRY_DELAY 		25
 
 typedef enum {
     VFD_Idle = 0,
@@ -73,6 +75,7 @@ static on_report_options_ptr on_report_options;
 static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
+static uint16_t retry_counter = 0;
 
 static void rx_packet (modbus_message_t *msg);
 static void rx_exception (uint8_t code, void *context);
@@ -85,39 +88,11 @@ static const modbus_callbacks_t callbacks = {
 // To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
 static void spindleGetMaxRPM (void)
 {
-    modbus_message_t cmd;
-    
-    /*modbus_message_t cmd = {
-        .context = (void *)VFD_GetPoles,
-        .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_WriteRegister,
-        .adu[2] = 0x01,
-        .adu[3] = 0x00,
-        .adu[4] = 0x02,
-        .adu[5] = 0x57,
-        .tx_length = 8,
-        .rx_length = 8
-    };
-    
-    modbus_send(&cmd, &callbacks, true);*/
 
-/*        cmd.context = (void *)VFD_GetMaxRPM;
-        cmd.adu[0] = VFD_ADDRESS;
-        cmd.adu[1] = ModBus_ReadHoldingRegisters;
-        cmd.adu[2] = 0x00;
-        cmd.adu[3] = 0x04;
-        cmd.adu[4] = 0x00;
-        cmd.adu[5] = 0x02;
-        cmd.tx_length = 8;
-        cmd.rx_length = 8;
-    modbus_send(&cmd, &callbacks, true);*/
 }
 
 static void spindleSetRPM (float rpm, bool block)
 {
-
-    if (rpm != rpm_programmed) {
-
         uint16_t data = ((uint32_t)(rpm)*50) / MOTOR_RPM_HZ;
 
         modbus_message_t rpm_cmd = {
@@ -140,10 +115,8 @@ static void spindleSetRPM (float rpm, bool block)
         if(settings.spindle.at_speed_tolerance > 0.0f) {
             spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
             spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
-        }
-        
+        }        
         rpm_programmed = rpm;
-    }
 }
 
 static void spindleUpdateRPM (float rpm)
@@ -234,13 +207,24 @@ static void rx_packet (modbus_message_t *msg)
             case VFD_GetRPM:
                 spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*MOTOR_RPM_HZ/100;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
+                retry_counter = 0;
                 break;
 
             case VFD_GetMaxRPM:
                 rpm_max = (msg->adu[4] << 8) | msg->adu[5];
+                retry_counter = 0;
                 break;
 
+            case VFD_SetStatus:
+                //add check here to ensure command was successful, retry if not.
+                retry_counter = 0;
+                break;
+            case VFD_SetRPM:
+                //add check here to ensure command was successful, retry if not.
+                retry_counter = 0;
+                break;        
             default:
+            retry_counter = 0;
                 break;
         }
     }
@@ -255,10 +239,35 @@ static void rx_exception (uint8_t code, void *context)
 {
     // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
     // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
-    if(sys.cold_start)
+    if(sys.cold_start){
         protocol_enqueue_rt_command(raise_alarm);
-    else
+    }
+    //if RX exceptions during one of the VFD messages, need to retry.
+    else if ((vfd_response_t)context > 0 ){
+        retry_counter++;
+        if (retry_counter >= RETRIES){
+            system_raise_alarm(Alarm_Spindle);
+            retry_counter = 0;
+            return;
+            }
+        switch((vfd_response_t)context) {
+            case VFD_SetStatus:    
+            case VFD_SetRPM:
+            modbus_reset();
+            hal.spindle.set_state(hal.spindle.get_state(), sys.spindle_rpm);
+            break;
+            case VFD_GetRPM:
+            modbus_reset();
+            hal.spindle.get_state();
+            break;
+            default:
+            break;
+        }//close switch statement
+    }
+    else{
+        retry_counter = 0;
         system_raise_alarm(Alarm_Spindle);
+    }
 }
 
 static void onReportOptions (bool newopt)
@@ -266,7 +275,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Durapulse VFD G20 v0.01]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Durapulse VFD G20 v0.03]" ASCII_EOL);
     }
 }
 

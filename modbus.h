@@ -82,6 +82,7 @@ typedef struct {
 } modbus_stream_t;
 
 void modbus_init (void);
+void modbus_reset (void);
 bool modbus_isup (void);
 bool modbus_enabled (void);
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
