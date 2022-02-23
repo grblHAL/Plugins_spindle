@@ -67,7 +67,7 @@ typedef struct queue_entry {
 static const uint32_t baud[]    = { 2400, 4800, 9600, 19200, 38400, 115200 };
 
 // Testing Huanyang VFDs (with other devices on the bus) has shown failure to respond if silent period is < 6ms
-#if HUANYANG_ENABLE == 1
+#if VFD_ENABLE == 1
 static const uint16_t silence[] = {   16,    8,    6,     6,     6,      6 };
 #else
 static const uint16_t silence[] = {   16,    8,    4,     2,     2,      2 };
@@ -176,11 +176,11 @@ static void modbus_poll (void)
         case ModBus_TX:
             if(!stream.get_tx_buffer_count()) {
 
-				// When an auto-direction sense circuit supports higher baudrates is used at slower rates, it can switch during the off time (TXD is high) of some bit sequences.
+                // When an auto-direction sense circuit supports higher baudrates is used at slower rates, it can switch during the off time (TXD is high) of some bit sequences.
                 // In some cases (teensy4.1) this can result in garbage characters in the RX buffer after a message is transmitted.
                 // Flushing the buffer prevents these characters from appearing as an RX message.
                 // Since Modbus is half-duplex, there should never be valid data recived during a message transmit.
-				stream.flush_rx_buffer();
+                stream.flush_rx_buffer();
                 
                 state = ModBus_AwaitReply;
 
