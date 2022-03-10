@@ -27,7 +27,7 @@
 #include "driver.h"
 #endif
 
-#if VFD_ENABLE == 3
+#if VFD_ENABLE
 
 #include <math.h>
 #include <string.h>
@@ -45,28 +45,15 @@
 #endif
 
 #include "modbus.h"
-
-#ifdef SPINDLE_PWM_DIRECT
-#error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
-#endif
+#include "vfd_spindle.h"
 
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
 
-#define MOTOR_RPM_HZ		60
+#define VFD_RPM_HZ		60
 #define RETRIES     		25
 #define RETRY_DELAY 		25
-
-typedef enum {
-    VFD_Idle = 0,
-    VFD_GetRPM,
-    VFD_SetRPM,
-    VFD_GetMaxRPM,
-    VFD_GetMaxRPM50,
-    VFD_GetStatus,
-    VFD_SetStatus,
-} vfd_response_t;
 
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
@@ -93,7 +80,7 @@ static void spindleGetMaxRPM (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*50) / MOTOR_RPM_HZ;
+        uint16_t data = ((uint32_t)(rpm)*50) / VFD_RPM_HZ;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -205,7 +192,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*MOTOR_RPM_HZ/100;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*VFD_RPM_HZ/100;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -341,8 +328,8 @@ bool g20_spindle_select (uint_fast8_t spindle_id)
     return true;
 }
 
-void vfd_init (void)
-{
+void GS20_init (void)
+{    
     if(modbus_enabled()) {
 
         on_spindle_select = grbl.on_spindle_select;

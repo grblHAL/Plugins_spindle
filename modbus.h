@@ -87,5 +87,6 @@ bool modbus_isup (void);
 bool modbus_enabled (void);
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
 modbus_state_t modbus_get_state (void);
+modbus_settings_t modbus;
 
 #endif

@@ -27,7 +27,7 @@
 #include "driver.h"
 #endif
 
-#if H100_VFD_ENABLE
+#if VFD_ENABLE
 
 #include <math.h>
 #include <string.h>
@@ -45,35 +45,24 @@
 #endif
 
 #include "modbus.h"
-
-#ifdef SPINDLE_PWM_DIRECT
-#error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
-#endif
+#include "vfd_spindle.h"
 
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
 
-typedef enum {
-    VFD_Idle = 0,
-    VFD_GetRPM,
-    VFD_SetRPM,
-    VFD_GetMaxRPM,
-    VFD_GetMaxRPM50,
-    VFD_GetStatus,
-    VFD_SetStatus
-} vfd_response_t;
+#define VFD_RPM_HZ		60
+#define RETRIES     		25
+#define RETRY_DELAY 		25
 
-static float rpm_programmed = -1.0f, rpm_low_limit = 0.0f, rpm_high_limit = 0.0f;
+static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static settings_changed_ptr settings_changed;
 static on_report_options_ptr on_report_options;
+static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
-#if H100_VFD_ENABLE == 1
-static uint32_t rpm_factor = 60;
-#endif
+static uint16_t retry_counter = 0;
 
 static void rx_packet (modbus_message_t *msg);
 static void rx_exception (uint8_t code, void *context);
@@ -83,70 +72,38 @@ static const modbus_callbacks_t callbacks = {
     .on_rx_exception = rx_exception
 };
 
-// Read maximum configured RPM from spindle, value is used later for calculating current RPM
-static void spindleTurnOn (void)
-{
-    modbus_message_t cmd = {
-        .context = (void *)VFD_SetStatus,
-        .crc_check = false,
-        .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_WriteCoil,
-        .adu[2] = 0x00,
-        .adu[3] = 0x48,
-        .adu[4] = 0xFF,
-        .adu[5] = 0x00,        
-        .tx_length = 8,
-        .rx_length = 8
-    };
-    modbus_send(&cmd, &callbacks, true);
-}
-
-// Read maximum configured RPM from spindle, value is used later for calculating current RPM
+// To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
 static void spindleGetMaxRPM (void)
 {
-    modbus_message_t cmd = {
-        .context = (void *)VFD_GetMaxRPM,
-        .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_ReadHoldingRegisters,
-        .adu[2] = 0x00,
-        .adu[3] = 0x05, //read max RPM
-        .adu[4] = 0x00,
-        .adu[5] = 0x01,
-        .tx_length = 8,
-        .rx_length = 7
-    };
-    modbus_send(&cmd, &callbacks, true);
+
 }
 
 static void spindleSetRPM (float rpm, bool block)
 {
-    if (rpm != rpm_programmed) {
-
-        uint32_t data = lroundf(rpm  / (float)rpm_factor * 10); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 250)
+        uint16_t data = ((uint32_t)(rpm)*50) / VFD_RPM_HZ;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
             .crc_check = false,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteRegister,
-            .adu[2] = 0x02,
+            .adu[2] = 0x20,
             .adu[3] = 0x01,
             .adu[4] = data >> 8,
             .adu[5] = data & 0xFF,
             .tx_length = 8,
             .rx_length = 8
-        };
+        };        
 
         vfd_state.at_speed = false;
 
         modbus_send(&rpm_cmd, &callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-            rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
-            rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
-        }
+            spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
+        }        
         rpm_programmed = rpm;
-    }
 }
 
 static void spindleUpdateRPM (float rpm)
@@ -156,23 +113,32 @@ static void spindleUpdateRPM (float rpm)
 
 // Start or stop spindle
 static void spindleSetState (spindle_state_t state, float rpm)
-{    
-    //spindleTurnOn();
+{
+    uint8_t runstop = 0;
+    uint8_t direction = 0;
+
+    if(!state.on || rpm == 0.0f)
+        runstop = 0x1;
+    else
+        runstop = 0x2;
+
+    if(state.ccw)
+        direction = 0x20;
+    else
+        direction = 0x10;
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
-        .crc_check = true,
+        .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
-        .adu[2] = 0x02,
-        .adu[3] = 0x00,                       
+        .adu[2] = 0x20,
+        .adu[3] = 0x00,
         .adu[4] = 0x00,
-        .adu[5] = (!state.on || rpm == 0.0f) ? 0x3 //Stop
-                                : (state.ccw ? 0x2  //Reverse Run
-                                : 0x1), //Forward Run  
-        .adu[5] = 0x00,              
+        .adu[5] = direction|runstop,
         .tx_length = 8,
         .rx_length = 8
-    };    
+    };
 
     if(vfd_state.ccw != state.ccw)
         rpm_programmed = 0.0f;
@@ -180,11 +146,13 @@ static void spindleSetState (spindle_state_t state, float rpm)
     vfd_state.on = state.on;
     vfd_state.ccw = state.ccw;
 
-    if(modbus_send(&mode_cmd, &callbacks, true)){
-        spindleSetRPM(rpm, true);    
-        //spindleTurnOn();
-    }
-    
+    if(modbus_send(&mode_cmd, &callbacks, true))
+        spindleSetRPM(rpm, true);
+}
+
+static spindle_data_t *spindleGetData (spindle_data_request_t request)
+{
+    return &spindle_data;
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -195,24 +163,26 @@ static spindle_state_t spindleGetState (void)
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_ReadInputRegisters,
-        .adu[2] = 0x00,
-        .adu[3] = 0x00,
+        .adu[1] = ModBus_ReadHoldingRegisters,
+        .adu[2] = 0x21,
+        .adu[3] = 0x03,
         .adu[4] = 0x00,
-        .adu[5] = 0x02,
+        .adu[5] = 0x01,
         .tx_length = 8,
-        .rx_length = 9
+        .rx_length = 7
     };
 
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
+    
+
+    // Get the actual RPM from spindle encoder input when available.
+    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
+        float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
+        vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
+    }
 
     return vfd_state; // return previous state as we do not want to wait for the response
-}
-
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
-{
-    return &spindle_data;
 }
 
 static void rx_packet (modbus_message_t *msg)
@@ -222,22 +192,26 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                //spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4]) * (float)rpm_max50 / 500.0f;
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4]) * (float)rpm_factor / 10;
-                //spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4]);
-                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= rpm_low_limit && spindle_data.rpm <= rpm_high_limit);
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*VFD_RPM_HZ/100;
+                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
+                retry_counter = 0;
                 break;
 
             case VFD_GetMaxRPM:
-                rpm_max = ((msg->adu[3] << 8) | msg->adu[4]) * rpm_factor / 10 ;
+                rpm_max = (msg->adu[4] << 8) | msg->adu[5];
+                retry_counter = 0;
                 break;
 
-            /*case VFD_GetMaxRPM50:
-                rpm_max50 = (msg->adu[3] << 8) | msg->adu[4];
-                break; 
-            */               
-
+            case VFD_SetStatus:
+                //add check here to ensure command was successful, retry if not.
+                retry_counter = 0;
+                break;
+            case VFD_SetRPM:
+                //add check here to ensure command was successful, retry if not.
+                retry_counter = 0;
+                break;        
             default:
+            retry_counter = 0;
                 break;
         }
     }
@@ -252,10 +226,35 @@ static void rx_exception (uint8_t code, void *context)
 {
     // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
     // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
-    if(sys.cold_start)
+    if(sys.cold_start){
         protocol_enqueue_rt_command(raise_alarm);
-    else
+    }
+    //if RX exceptions during one of the VFD messages, need to retry.
+    else if ((vfd_response_t)context > 0 ){
+        retry_counter++;
+        if (retry_counter >= RETRIES){
+            system_raise_alarm(Alarm_Spindle);
+            retry_counter = 0;
+            return;
+            }
+        switch((vfd_response_t)context) {
+            case VFD_SetStatus:    
+            case VFD_SetRPM:
+            modbus_reset();
+            hal.spindle.set_state(hal.spindle.get_state(), sys.spindle_rpm);
+            break;
+            case VFD_GetRPM:
+            modbus_reset();
+            hal.spindle.get_state();
+            break;
+            default:
+            break;
+        }//close switch statement
+    }
+    else{
+        retry_counter = 0;
         system_raise_alarm(Alarm_Spindle);
+    }
 }
 
 static void onReportOptions (bool newopt)
@@ -263,43 +262,41 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:H100 VFD v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:H100 VFD v0.02]" ASCII_EOL);
     }
 }
 
-static void H100_reset (void)
+static void h100_reset (void)
 {
     driver_reset();
-    spindleGetMaxRPM();
+    //spindleGetMaxRPM();
 }
 
-static void H100_settings_changed (settings_t *settings)
+bool h100_spindle_select (uint_fast8_t spindle_id)
 {
     static bool init_ok = false, vfd_active = false;
     static driver_cap_t driver_cap;
     static spindle_ptrs_t spindle_org;
 
-    if(settings_changed)
-        settings_changed(settings);
+    if(vfd_active && spindle_id != 1 && spindle_org.set_state != NULL) {
+
+        vfd_active = false;
+
+        gc_spindle_off();
+
+        hal.driver_cap = driver_cap;
+        memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
+    }
+
+    if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;
 
     if(!modbus_isup())
-        return;
+        return false;
 
-    if(hal.driver_cap.dual_spindle && settings->mode == Mode_Laser) {
-        if(vfd_active) {
-
-            vfd_active = false;
-
-            hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-
-            hal.driver_cap = driver_cap;
-            memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
-        }
-    } else {
+    if((vfd_active = spindle_id == 1)) {
 
         if(hal.spindle.set_state != spindleSetState) {
-
-            vfd_active = true;
 
             if(spindle_org.set_state == NULL) {
                 driver_cap = hal.driver_cap;
@@ -307,7 +304,7 @@ static void H100_settings_changed (settings_t *settings)
             }
 
             if(spindle_org.set_state)
-                spindle_org.set_state((spindle_state_t){0}, 0.0f);
+                gc_spindle_off();
 
             hal.spindle.set_state = spindleSetState;
             hal.spindle.get_state = spindleGetState;
@@ -319,7 +316,7 @@ static void H100_settings_changed (settings_t *settings)
             hal.driver_cap.spindle_dir = On;
         }
 
-        if(settings->spindle.ppr == 0)
+        if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
 
         if(!init_ok) {
@@ -327,22 +324,22 @@ static void H100_settings_changed (settings_t *settings)
             spindleGetMaxRPM();
         }
     }
+
+    return true;
 }
 
 void H100_init (void)
-{
+{    
     if(modbus_enabled()) {
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = H100_settings_changed;
+
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = h100_spindle_select;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
         driver_reset = hal.driver_reset;
-        hal.driver_reset = H100_reset;
-
-        if(!hal.driver_cap.dual_spindle)
-            H100_settings_changed(&settings);
+        hal.driver_reset = h100_reset;
     }
 }
 
