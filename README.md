@@ -15,4 +15,19 @@ __NOTE:__ You will want to add the following two lines to settings.h in the grbl
     Setting_VFD_RPM_HZ = 396, // Set RPM/Hz (not used by all VFD types)
       
 ---
+
+And add the following in modbus.h
+
+    typedef struct {
+        uint32_t baud_rate;
+        uint32_t rx_timeout;
+    #ifdef VFD_ENABLE
+        uint32_t vfd_type;
+        uint32_t vfd_rpm_hz;
+    #endif
+    } modbus_settings_t;
+
+---
+
+
 2022-01-23
