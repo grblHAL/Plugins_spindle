@@ -269,7 +269,6 @@ static void onReportOptions (bool newopt)
 static void h100_reset (void)
 {
     driver_reset();
-    //spindleGetMaxRPM();
 }
 
 bool h100_spindle_select (uint_fast8_t spindle_id)

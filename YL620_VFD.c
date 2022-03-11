@@ -100,9 +100,6 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-#ifndef VFD_RPM_HZ
-#define VFD_RPM_HZ		60
-#endif
 #define RETRIES     		25
 #define RETRY_DELAY 		25
 
@@ -131,7 +128,7 @@ static void spindleGetMaxRPM (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*10) / VFD_RPM_HZ;
+        uint16_t data = ((uint32_t)(rpm)*10) / modbus.vfd_rpm_hz;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -243,7 +240,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*VFD_RPM_HZ/100;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*modbus.vfd_rpm_hz/10;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -313,7 +310,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Yalang VFD YL620A v0.03]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Yalang VFD YL620A v0.01]" ASCII_EOL);
     }
 }
 

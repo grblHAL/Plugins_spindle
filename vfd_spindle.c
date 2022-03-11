@@ -94,7 +94,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Runtime VFD Control v0.01]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Runtime VFD Selector v0.01]" ASCII_EOL);
     }
 }
 
@@ -104,9 +104,6 @@ void vfd_init (void)
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
-
-        //driver_reset = hal.driver_reset;
-        //hal.driver_reset = vfd_reset;
 
         settings_changed = hal.settings_changed;
         hal.settings_changed = _settings_changed;
