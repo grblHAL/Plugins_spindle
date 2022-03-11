@@ -2,7 +2,7 @@
 
 Added Durapulse GS20 and Yalang YL620A support.  Hard reset is required when changing VFD models.
 
-This plugin adds support for VFD spindles via ModBus (RS485).  Runtime switching is currently under the Modbus settings in IOSender.  Hard reset required after saving settings.
+This plugin adds support for VFD spindles via ModBus (RS485).  Runtime switching of VFD model is currently under the Modbus settings in IOSender.  Hard reset required after saving settings.
 
 Switching between Modbus VFD spindle and PWM output is possible via a M-code, currently `M104`: `M104P0` for PWM (laser) and `M104P1` for VFD.  
 Available when `\\#define DUAL_SPINDLE` is uncommented in _my_machine.h_ for drivers that has support.
