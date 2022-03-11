@@ -1,6 +1,6 @@
 ## Spindle plugins
 
-Added Durapulse GS20 and Yalang YL620A support.
+Added Durapulse GS20 and Yalang YL620A support.  Hard reset is required when changing VFD models.
 
 This plugin adds support for VFD spindles via ModBus (RS485).
 
@@ -13,7 +13,6 @@ __NOTE:__ You will want to add the following two lines to settings.h in the grbl
 
     Setting_VFD_TYPE = 395, // Select from available VFD types
     Setting_VFD_RPM_HZ = 396, // Set RPM/Hz (not used by all VFD types)
-    
-Hard reset is required when changing VFD models.    
+      
 ---
 2022-01-23
