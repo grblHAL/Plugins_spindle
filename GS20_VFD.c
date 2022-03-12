@@ -51,9 +51,6 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-#define RETRIES     		25
-#define RETRY_DELAY 		25
-
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};

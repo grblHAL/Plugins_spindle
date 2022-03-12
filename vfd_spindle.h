@@ -32,6 +32,9 @@
 #define VFD_ADDRESS 0x01
 #endif
 
+#define RETRIES     		25
+#define RETRY_DELAY 		25
+
 typedef enum {
     VFD_Idle = 0,
     VFD_GetRPM,

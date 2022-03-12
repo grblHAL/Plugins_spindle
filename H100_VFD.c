@@ -51,10 +51,6 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-#define VFD_RPM_HZ		60
-#define RETRIES     		25
-#define RETRY_DELAY 		25
-
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
@@ -80,7 +76,7 @@ static void spindleGetMaxRPM (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*50) / VFD_RPM_HZ;
+        uint16_t data = ((uint32_t)(rpm)*50) / modbus.vfd_type;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -192,7 +188,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*VFD_RPM_HZ/100;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*modbus.vfd_type/100;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;

@@ -56,8 +56,8 @@
 #endif
 
 static on_report_options_ptr on_report_options;
-static on_spindle_select_ptr on_spindle_select;
-static driver_reset_ptr driver_reset;
+//static on_spindle_select_ptr on_spindle_select;
+//static driver_reset_ptr driver_reset;
 
 static settings_changed_ptr settings_changed;
 
@@ -68,7 +68,7 @@ static void _settings_changed (settings_t *settings)
     if(settings_changed)
         settings_changed(settings);
 
-    if(hal.spindle.set_state == NULL && modbus.vfd_type != NULL){
+    if(hal.spindle.set_state == NULL && modbus_isup()){
         switch (modbus.vfd_type) {
             case H100:
             H100_init();
