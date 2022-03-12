@@ -32,7 +32,7 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-#define RETRIES     		25
+#define VFD_RETRIES     25
 #define RETRY_DELAY 		25
 
 typedef enum {

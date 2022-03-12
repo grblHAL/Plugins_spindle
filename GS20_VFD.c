@@ -226,7 +226,7 @@ static void rx_exception (uint8_t code, void *context)
     //if RX exceptions during one of the VFD messages, need to retry.
     else if ((vfd_response_t)context > 0 ){
         retry_counter++;
-        if (retry_counter >= RETRIES){
+        if (retry_counter >= VFD_RETRIES){
             system_raise_alarm(Alarm_Spindle);
             retry_counter = 0;
             return;

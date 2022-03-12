@@ -76,14 +76,14 @@ static void spindleGetMaxRPM (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*50) / modbus.vfd_type;
+        uint16_t data = ((uint32_t)(rpm)) / modbus.vfd_rpm_hz * 10;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
             .crc_check = false,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteRegister,
-            .adu[2] = 0x20,
+            .adu[2] = 0x02,
             .adu[3] = 0x01,
             .adu[4] = data >> 8,
             .adu[5] = data & 0xFF,
@@ -111,30 +111,40 @@ static void spindleUpdateRPM (float rpm)
 static void spindleSetState (spindle_state_t state, float rpm)
 {
     uint8_t runstop = 0;
-    uint8_t direction = 0;
-
-    if(!state.on || rpm == 0.0f)
-        runstop = 0x1;
-    else
-        runstop = 0x2;
 
     if(state.ccw)
-        direction = 0x20;
+        runstop = 0x4A;
     else
-        direction = 0x10;
+        runstop = 0x48;    
+
+    if(!state.on || rpm == 0.0f)
+        runstop = 0x4B;
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_WriteRegister,
-        .adu[2] = 0x20,
-        .adu[3] = 0x00,
-        .adu[4] = 0x00,
-        .adu[5] = direction|runstop,
+        .adu[1] = ModBus_WriteCoil,
+        .adu[2] = 0x00,
+        .adu[3] = 0x48,
+        .adu[4] = 0xFF,
+        .adu[5] = 0x00,
         .tx_length = 8,
         .rx_length = 8
     };
+
+       /* modbus_message_t mode_cmd = {
+        .context = (void *)VFD_SetStatus,
+        .crc_check = true,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = 0x02,
+        .adu[3] = 0x00,                       
+        .adu[4] = 0x00,
+        .adu[5] = runstop,            
+        .tx_length = 8,
+        .rx_length = 8
+    }; */
 
     if(vfd_state.ccw != state.ccw)
         rpm_programmed = 0.0f;
@@ -159,13 +169,13 @@ static spindle_state_t spindleGetState (void)
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
-        .adu[1] = ModBus_ReadHoldingRegisters,
-        .adu[2] = 0x21,
-        .adu[3] = 0x03,
+        .adu[1] = ModBus_ReadInputRegisters,
+        .adu[2] = 0x00,
+        .adu[3] = 0x00,
         .adu[4] = 0x00,
-        .adu[5] = 0x01,
+        .adu[5] = 0x02,
         .tx_length = 8,
-        .rx_length = 7
+        .rx_length = 9
     };
 
 
@@ -188,7 +198,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*modbus.vfd_type/100;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*modbus.vfd_rpm_hz;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -228,7 +238,7 @@ static void rx_exception (uint8_t code, void *context)
     //if RX exceptions during one of the VFD messages, need to retry.
     else if ((vfd_response_t)context > 0 ){
         retry_counter++;
-        if (retry_counter >= RETRIES){
+        if (retry_counter >= VFD_RETRIES){
             system_raise_alarm(Alarm_Spindle);
             retry_counter = 0;
             return;

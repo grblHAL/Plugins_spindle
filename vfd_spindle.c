@@ -56,8 +56,6 @@
 #endif
 
 static on_report_options_ptr on_report_options;
-//static on_spindle_select_ptr on_spindle_select;
-//static driver_reset_ptr driver_reset;
 
 static settings_changed_ptr settings_changed;
 
@@ -68,7 +66,7 @@ static void _settings_changed (settings_t *settings)
     if(settings_changed)
         settings_changed(settings);
 
-    if(hal.spindle.set_state == NULL && modbus_isup()){
+    if(hal.spindle.set_state == NULL && modbus_isup()){     
         switch (modbus.vfd_type) {
             case H100:
             H100_init();
@@ -94,7 +92,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Runtime VFD Selector v0.01]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Runtime VFD Selector v0.02]" ASCII_EOL);
     }
 }
 

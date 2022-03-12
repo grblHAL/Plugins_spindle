@@ -424,7 +424,7 @@ static void modbus_settings_restore (void)
     modbus.baud_rate = baud[DEFAULT_BAUDRATE];
 
     #ifdef VFD_ENABLE
-    modbus.vfd_type = VFD_ENABLE - 1;
+    modbus.vfd_type = VFD_ENABLE;
     modbus.vfd_rpm_hz = 60;
     #endif
 
