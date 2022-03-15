@@ -1,6 +1,15 @@
 ## Spindle plugins
 
-Added Durapulse GS20 and Yalang YL620A support.  Hard reset is required when changing VFD models.
+Currentlys supported/tested VFDs:
+Huanyang model 1 and model P2A
+Yalang YL620
+Durapulse GS20
+
+H100 support is currently WIP.
+
+Settings $395 and $396 added to select the model and change rpm/hz as required.
+
+Hard reset is required when changing VFD models.
 
 This plugin adds support for VFD spindles via ModBus (RS485).  Runtime switching of VFD model is currently under the Modbus settings in IOSender.  Hard reset required after saving settings.
 
