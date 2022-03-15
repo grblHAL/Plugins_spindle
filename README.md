@@ -1,6 +1,7 @@
 ## Spindle plugins
 
 Currentlys supported/tested VFDs:
+
 Huanyang model 1 and model P2A
 Yalang YL620
 Durapulse GS20
