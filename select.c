@@ -41,7 +41,7 @@ static status_code_t validate (parser_block_t *gc_block, parameter_words_t *depr
 {
     status_code_t state = Status_OK;
 
-    if(gc_block->user_mcode == Spindle_Select && grbl.on_spindle_select) {
+    if(gc_block->user_mcode == Spindle_Select) {
 
         if(!gc_block->words.p || isnanf(gc_block->values.p))
             state = Status_GcodeValueWordMissing;
@@ -60,14 +60,14 @@ static status_code_t validate (parser_block_t *gc_block, parameter_words_t *depr
 static void execute (sys_state_t state, parser_block_t *gc_block)
 {
     if(gc_block->user_mcode == Spindle_Select)
-        grbl.on_spindle_select((uint_fast8_t)(gc_block->values.p));
+        spindle_select((spindle_id_t)(gc_block->values.p == 0.0f ? 0 : settings.spindle.flags.type));
     else if(user_mcode.execute)
         user_mcode.execute(state, gc_block);
 }
 
 void spindle_select_init (void)
 {
-    if(grbl.on_spindle_select) {
+    if(spindle_get_count() > 1) {
 
         memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
 
