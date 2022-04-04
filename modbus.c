@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2021 Terje Io
+  Copyright (c) 2020-2022 Terje Io
   except modbus_CRC16x which is Copyright (c) 2006 Christian Walter <wolti@sil.at>
   Lifted from his FreeModbus Libary
 
@@ -447,7 +447,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.10]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.12]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
@@ -512,48 +512,12 @@ static bool claim_stream (io_stream_properties_t const *sstream)
                 hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
                 hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + claimed->instance), "Modbus");
             }
-        }
+        } else
+            claimed = NULL;
     }
 
     return claimed != NULL;
 }
-
-#if VFD_ENABLE
-
-// Dummy spindle, installed if modbus_init() fails.
-
-static settings_changed_ptr settings_changed;
-
-static void spindleUpdateRPM (float rpm)
-{
-}
-
-static void spindleSetState (spindle_state_t state, float rpm)
-{
-}
-
-static spindle_state_t spindleGetState (void)
-{
-    return (spindle_state_t){0};
-}
-
-static void _settings_changed (settings_t *settings)
-{
-    if(settings_changed)
-        settings_changed(settings);
-
-    if(hal.spindle.set_state == NULL) {
-        hal.spindle.set_state = spindleSetState;
-        hal.spindle.get_state = spindleGetState;
-        hal.spindle.update_rpm = spindleUpdateRPM;
-        hal.spindle.reset_data = NULL;
-        hal.driver_cap.variable_spindle = Off;
-        hal.driver_cap.spindle_at_speed = Off;
-        hal.driver_cap.spindle_dir = Off;
-    }
-}
-
-#endif
 
 void modbus_init (void)
 {
@@ -599,11 +563,6 @@ void modbus_init (void)
             queue[idx].next = idx == MODBUS_QUEUE_LENGTH - 1 ? &queue[0] : &queue[idx + 1];
 
     } else {
-
-#if VFD_ENABLE
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = _settings_changed;
-#endif
         protocol_enqueue_rt_command(pos_failed);
         system_raise_alarm(Alarm_SelftestFailed);
     }
