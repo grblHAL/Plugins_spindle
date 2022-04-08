@@ -72,7 +72,7 @@
 #include "driver.h"
 #endif
 
-#if VFD_ENABLE
+#if VFD_ENABLE == 66
 
 #include <math.h>
 #include <string.h>

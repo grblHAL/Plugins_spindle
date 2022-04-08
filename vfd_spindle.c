@@ -35,11 +35,13 @@
 #ifdef ARDUINO
 #include "../grbl/hal.h"
 #include "../grbl/protocol.h"
+#include "grbl/nvs_buffer.h"
 #include "../grbl/state_machine.h"
 #include "../grbl/report.h"
 #else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
+#include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
 #include "grbl/report.h"
 #endif
@@ -55,57 +57,141 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-static on_report_options_ptr on_report_options;
+static on_spindle_select_ptr on_spindle_select;
+static nvs_address_t nvs_address = 0;
 
-static settings_changed_ptr settings_changed;
 
-extern modbus_settings_t modbus;
+// Add info about our settings for $help and enumerations.
+// Potentially used by senders for settings UI.
 
-static void _settings_changed (settings_t *settings)
+static const setting_group_detail_t vfd_groups [] = {
+    {Group_Root, Group_UserSettings, "VFD Config"}
+};
+
+static const setting_detail_t vfd_settings[] = {
+     { Setting_VFD_TYPE, Group_UserSettings, "VFD Model", NULL, Format_RadioButtons, "Huanyang 1,Huanyang P2A,Durapulse GS20,Yalang YL620A, MODVFD Custom", NULL, NULL, Setting_NonCore, &vfd_config.vfd_type, NULL, NULL },  
+     { Setting_VFD_RPM_HZ, Group_UserSettings, "RPM per Hz", "", Format_Integer, "####0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, NULL },
+     { Setting_UserDefined_10, Group_UserSettings, "Run/Stop Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.runstop_reg, NULL, NULL },  
+     { Setting_UserDefined_11, Group_UserSettings, "Set Frequency Register (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.set_freq_reg, NULL, NULL },    
+     { Setting_UserDefined_12, Group_UserSettings, "Get Frequency Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.get_freq_reg, NULL, NULL },  
+     { Setting_UserDefined_13, Group_UserSettings, "Run CW Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_cw_cmd, NULL, NULL },   
+     { Setting_UserDefined_14, Group_UserSettings, "Run CCW Command (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_ccw_cmd, NULL, NULL },  
+     { Setting_UserDefined_15, Group_UserSettings, "Stop Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.stop_cmd, NULL, NULL },   
+
+};
+
+#ifndef NO_SETTINGS_DESCRIPTIONS
+static const setting_descr_t vfd_settings_descr[] = {
+    { Setting_VFD_TYPE, "type of vfd" },
+    { Setting_VFD_RPM_HZ, "rpm_hz" },
+    { Setting_UserDefined_10, "Register for Run/stop" },
+    { Setting_UserDefined_11, "Set Frequency Register" },
+    { Setting_UserDefined_12, "Register for Run/stop" },
+    { Setting_UserDefined_13, "Set Frequency Register" },
+    { Setting_UserDefined_14, "Register for Run/stop" },
+    { Setting_UserDefined_15, "Set Frequency Register" },        
+};
+#endif
+
+// Write settings to non volatile storage (NVS).
+static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
-    if(settings_changed)
-        settings_changed(settings);
+    if(spindle_id == NULL) {
 
-    if(hal.spindle.set_state == NULL && modbus_isup()){     
-        switch (modbus.vfd_type) {
-            case H100:
-            H100_init();
+        switch (vfd_config.vfd_type) {
+            case MODVFD:
+            MODVFD_init();
             break;
             case GS20:
-            GS20_init();
+            //GS20_init();
             break;
             case YL620A:
-            YL620_init();
+            //YL620_init();
             break;
             case HUANYANG1:
             case HUANYANG2:
-            HY_VFD_init();
+            vfd_huanyang_init();
             break;            
             default:
             break;
         }
     }
+
+    return true;
 }
+
+
+static void vfd_settings_save (void)
+{
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&vfd_config, sizeof(vfd_settings_t), true);
+}
+
+static void vfd_settings_restore (void)
+{
+    vfd_config.vfd_type = HUANYANG1;
+    vfd_config.vfd_rpm_hz = 60;
+    vfd_config.runstop_reg = 61;
+    vfd_config.set_freq_reg = 62;
+    vfd_config.get_freq_reg = 63;
+    vfd_config.run_cw_cmd = 64;
+    vfd_config.run_ccw_cmd = 65;
+    vfd_config.stop_cmd = 66;
+
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&vfd_config, sizeof(vfd_settings_t), true);
+}
+
+static void vfd_settings_load (void)
+{
+
+    if(nvs_address != 0){
+        if((hal.nvs.memcpy_from_nvs((uint8_t *)&vfd_config, nvs_address, sizeof(vfd_settings_t), true) != NVS_TransferResult_OK))
+            vfd_settings_restore();
+    }
+}
+
+static setting_details_t vfd_setting_details = {
+    .groups = vfd_groups,
+    .n_groups = sizeof(vfd_groups) / sizeof(setting_group_detail_t),
+    .settings = vfd_settings,
+    .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
+#ifndef NO_SETTINGS_DESCRIPTIONS
+    .descriptions = vfd_settings_descr,
+    .n_descriptions = sizeof(vfd_settings_descr) / sizeof(setting_descr_t),
+#endif
+    .load = vfd_settings_load,
+    .restore = vfd_settings_restore,
+    .save = vfd_settings_save
+};
+
+static on_report_options_ptr on_report_options;
+
+extern modbus_settings_t modbus;
 
 static void onReportOptions (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Runtime VFD Selector v0.02]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:VFD SELECTOR v0.02]" ASCII_EOL);
     }
 }
 
 void vfd_init (void)
 {
-    if(modbus_enabled()) {
+    if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = _settings_changed;
-    }    
+        settings_register(&vfd_setting_details);
+
+        //vfd_huanyang_init();
+        //MODVFD_init();
+
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = vfd_spindle_select;
+        
+    }
 }
 
 #endif

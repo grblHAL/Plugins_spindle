@@ -24,6 +24,14 @@
 #ifndef _VFD_SPINDLE_H_
 #define _VFD_SPINDLE_H_
 
+#ifdef ARDUINO
+#include "../grbl/gcode.h"
+#include "../grbl/settings.h"
+#else
+#include "grbl/gcode.h"
+#include "grbl/settings.h"
+#endif
+
 #ifdef SPINDLE_PWM_DIRECT
 #error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
 #endif
@@ -42,7 +50,7 @@ typedef enum {
     VFD_GetMaxRPM,
     VFD_GetMaxRPM50,
     VFD_GetStatus,
-    VFD_SetStatus,
+    VFD_SetStatus
 } vfd_response_t;
 
 typedef enum {
@@ -50,12 +58,25 @@ typedef enum {
     HUANYANG2,
     GS20,
     YL620A,
-    H100,
+    MODVFD,
 } vfd_type_t;
+
+typedef struct {
+    vfd_type_t vfd_type;
+    uint32_t vfd_rpm_hz;
+    uint16_t runstop_reg;
+    uint16_t set_freq_reg;
+    uint16_t get_freq_reg;
+    uint16_t run_cw_cmd;
+    uint16_t run_ccw_cmd;
+    uint16_t stop_cmd;
+} vfd_settings_t;
+
+vfd_settings_t vfd_config;
 
 void GS20_init (void);
 void YL620_init (void);
-void HY_VFD_init (void);
-void H100_init (void);
+void vfd_huanyang_init (void);
+void MODVFD_init (void);
 
 #endif

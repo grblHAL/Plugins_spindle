@@ -382,11 +382,7 @@ static const setting_group_detail_t modbus_groups [] = {
 
 static const setting_detail_t modbus_settings[] = {
     { Settings_ModBus_BaudRate, Group_ModBus, "ModBus baud rate", NULL, Format_RadioButtons, "2400,4800,9600,19200,38400,115200", NULL, NULL, Setting_NonCoreFn, modbus_set_baud, modbus_get_baud, NULL },
-    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL },
-#ifdef VFD_ENABLE
-     { Setting_VFD_TYPE, Group_ModBus, "VFD Model", NULL, Format_RadioButtons, "Huanyang 1,Huanyang P2A,Durapulse GS20,Yalang YL620A, H100 VFD", NULL, NULL, Setting_NonCore, &modbus.vfd_type, NULL, NULL },  
-     { Setting_VFD_RPM_HZ, Group_ModBus, "RPM per Hz", "", Format_Integer, "####0", "1", "3000", Setting_NonCore, &modbus.vfd_rpm_hz, NULL, NULL },   
-#endif     
+    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL },   
 };
 
 static void modbus_settings_save (void)
@@ -422,11 +418,6 @@ static void modbus_settings_restore (void)
 {
     modbus.rx_timeout = 50;
     modbus.baud_rate = baud[DEFAULT_BAUDRATE];
-
-    #ifdef VFD_ENABLE
-    modbus.vfd_type = VFD_ENABLE;
-    modbus.vfd_rpm_hz = 60;
-    #endif
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&modbus, sizeof(modbus_settings_t), true);
 }
