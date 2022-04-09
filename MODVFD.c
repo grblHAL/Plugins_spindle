@@ -1,6 +1,8 @@
 /*
 
-  YL620_VFD.c - Yalang VFD spindle support
+  MODVFD.c - MODVFD VFD spindle support for Modbus RTU compatible spindles.
+  Requires Modbus RTU support with 8N1 configuration.
+
 
   Part of grblHAL
 
@@ -19,51 +21,6 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 
-      Manual Configuration required for the YL620
-    Parameter number        Description                     Value
-    -------------------------------------------------------------------------------
-    P00.00                  Main frequency                  400.00Hz (match to your spindle)
-    P00.01                  Command source                  3
-    
-    P03.00                  RS485 Baud rate                 3 (9600)
-    P03.01                  RS485 address                   1
-    P03.02                  RS485 protocol                  2
-    P03.08                  Frequency given lower limit     100.0Hz (match to your spindle cooling-type)
-    ===============================================================================================================
-
-    RS485 communication is standard Modbus RTU
-    Therefore, the following operation codes are relevant:
-    0x03:   read single holding register
-    0x06:   write single holding register
-    Given a parameter Pnn.mm, the high byte of the register address is nn,
-    the low is mm.  The numbers nn and mm in the manual are given in decimal,
-    so P13.16 would be register address 0x0d10 when represented in hex.
-    Holding register address                Description
-    ---------------------------------------------------------------------------
-    0x0000                                  main frequency
-    0x0308                                  frequency given lower limit
-    0x2000                                  command register (further information below)
-    0x2001                                  Modbus485 frequency command (x0.1Hz => 2500 = 250.0Hz)
-    0x200A                                  Target frequency
-    0x200B                                  Output frequency
-    0x200C                                  Output current    
-
-    Command register at holding address 0x2000
-    --------------------------------------------------------------------------
-    bit 1:0             b00: No function
-                        b01: shutdown command
-                        b10: start command
-                        b11: Jog command
-    bit 3:2             reserved
-    bit 5:4             b00: No function
-                        b01: Forward command
-                        b10: Reverse command
-                        b11: change direction
-    bit 7:6             b00: No function
-                        b01: reset an error flag
-                        b10: reset all error flags
-                        b11: reserved    
-
 */
 
 #ifdef ARDUINO
@@ -80,6 +37,7 @@
 #ifdef ARDUINO
 #include "../grbl/hal.h"
 #include "../grbl/protocol.h"
+#include "grbl/nvs_buffer.h"
 #include "../grbl/state_machine.h"
 #include "../grbl/report.h"
 #else
@@ -92,15 +50,11 @@
 #include "modbus.h"
 #include "vfd_spindle.h"
 
-#ifdef SPINDLE_PWM_DIRECT
-#error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
-#endif
-
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
 
-static spindle_id_t yl620_spindle_id = -1;
+static spindle_id_t modvfd_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
@@ -119,22 +73,22 @@ static const modbus_callbacks_t callbacks = {
 };
 
 // To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
-bool yl620_spindle_config (void)
+bool modvfd_spindle_config (void)
 {
     return 1;
 }
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*10) / vfd_config.vfd_rpm_hz;
+        uint16_t data = ((uint32_t)(rpm)) / vfd_config.in_divider * vfd_config.in_multiplier;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
             .crc_check = false,
             .adu[0] = VFD_ADDRESS,
             .adu[1] = ModBus_WriteRegister,
-            .adu[2] = 0x20,
-            .adu[3] = 0x01,
+            .adu[2] = vfd_config.set_freq_reg >> 8,
+            .adu[3] = vfd_config.set_freq_reg & 0xFF,
             .adu[4] = data >> 8,
             .adu[5] = data & 0xFF,
             .tx_length = 8,
@@ -161,30 +115,27 @@ static void spindleUpdateRPM (float rpm)
 static void spindleSetState (spindle_state_t state, float rpm)
 {
     uint8_t runstop = 0;
-    uint8_t direction = 0;
-
-    if(!state.on || rpm == 0.0f)
-        runstop = 0x1;
-    else
-        runstop = 0x2;
 
     if(state.ccw)
-        direction = 0x20;
+        runstop = vfd_config.run_ccw_cmd;
     else
-        direction = 0x10;
+        runstop = vfd_config.run_cw_cmd;    
 
-    modbus_message_t mode_cmd = {
+    if(!state.on || rpm == 0.0f)
+        runstop = vfd_config.stop_cmd;
+
+       modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
-        .crc_check = false,
+        .crc_check = true,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
-        .adu[2] = 0x20,
-        .adu[3] = 0x00,
-        .adu[4] = 0x00,
-        .adu[5] = direction|runstop,
+        .adu[2] = vfd_config.runstop_reg >> 8,
+        .adu[3] = vfd_config.runstop_reg & 0xFF,
+        .adu[4] = runstop >> 8,
+        .adu[5] = runstop & 0xFF,          
         .tx_length = 8,
         .rx_length = 8
-    };
+    }; 
 
     if(vfd_state.ccw != state.ccw)
         rpm_programmed = 0.0f;
@@ -210,14 +161,13 @@ static spindle_state_t spindleGetState (void)
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
-        .adu[2] = 0x20,
-        .adu[3] = 0x0B,
+        .adu[2] = vfd_config.get_freq_reg >> 8,
+        .adu[3] = vfd_config.get_freq_reg & 0xFF,
         .adu[4] = 0x00,
         .adu[5] = 0x01,
         .tx_length = 8,
         .rx_length = 7
     };
-
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
     
@@ -238,7 +188,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*vfd_config.vfd_rpm_hz/10;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*vfd_config.vfd_rpm_hz;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -308,18 +258,18 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-        hal.stream.write("[PLUGIN:Yalang VFD YL620A v0.01]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODVFD v0.02]" ASCII_EOL);
     }
 }
 
-static void yl620_reset (void)
+static void MODVFD_reset (void)
 {
     driver_reset();
 }
 
-static bool yl620_spindle_select (spindle_id_t spindle_id)
+static bool MODVFD_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == yl620_spindle_id) {
+    if(spindle_id == modvfd_spindle_id) {
 
         if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
@@ -333,14 +283,14 @@ static bool yl620_spindle_select (spindle_id_t spindle_id)
     return true;
 }
 
-void YL620_init (void)
+void MODVFD_init (void)
 {    
 
-    static const spindle_ptrs_t yl620_spindle = {
+    static const spindle_ptrs_t modvfd_spindle = {
         .cap.variable = On,
         .cap.at_speed = On,
         .cap.direction = On,
-        .config = yl620_spindle_config,
+        .config = modvfd_spindle_config,
         .set_state = spindleSetState,
         .get_state = spindleGetState,
         .update_rpm = spindleUpdateRPM
@@ -348,16 +298,16 @@ void YL620_init (void)
 
     if (vfd_config.vfd_type == MODVFD){
 
-    yl620_spindle_id = spindle_register(&yl620_spindle, "YL620");
+    modvfd_spindle_id = spindle_register(&modvfd_spindle, "MODVFD");
 
     on_spindle_select = grbl.on_spindle_select;
-    grbl.on_spindle_select = yl620_spindle_select;
+    grbl.on_spindle_select = MODVFD_spindle_select;
 
     on_report_options = grbl.on_report_options;
     grbl.on_report_options = onReportOptions;
 
     driver_reset = hal.driver_reset;
-    hal.driver_reset = yl620_reset;
+    hal.driver_reset = MODVFD_reset;
     
     }
 }

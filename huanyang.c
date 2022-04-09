@@ -404,11 +404,11 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if VFD_ENABLE == 1
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG v1 v0.07]" ASCII_EOL);
 #elif VFD_ENABLE == 2
         hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.07]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
 #endif
     }
 }

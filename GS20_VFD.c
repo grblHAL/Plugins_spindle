@@ -27,7 +27,7 @@
 #include "driver.h"
 #endif
 
-#if VFD_ENABLE == 66
+#if VFD_ENABLE
 
 #include <math.h>
 #include <string.h>
@@ -51,6 +51,7 @@
 #define VFD_ADDRESS 0x01
 #endif
 
+static spindle_id_t gs20_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
@@ -69,14 +70,14 @@ static const modbus_callbacks_t callbacks = {
 };
 
 // To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
-static void spindleGetMaxRPM (void)
+bool gs20_spindle_config (void)
 {
-
+    return 1;
 }
 
 static void spindleSetRPM (float rpm, bool block)
 {
-        uint16_t data = ((uint32_t)(rpm)*50) / modbus.vfd_rpm_hz;
+        uint16_t data = ((uint32_t)(rpm)*50) / vfd_config.vfd_rpm_hz;
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -188,7 +189,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*modbus.vfd_rpm_hz/100;
+                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*vfd_config.vfd_rpm_hz/100;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -260,79 +261,53 @@ static void onReportOptions (bool newopt)
     }
 }
 
-static void g20_reset (void)
+static void gs20_reset (void)
 {
     driver_reset();
 }
 
-bool g20_spindle_select (uint_fast8_t spindle_id)
+static bool gs20_spindle_select (spindle_id_t spindle_id)
 {
-    static bool init_ok = false, vfd_active = false;
-    static driver_cap_t driver_cap;
-    static spindle_ptrs_t spindle_org;
-
-    if(vfd_active && spindle_id != 1 && spindle_org.set_state != NULL) {
-
-        vfd_active = false;
-
-        gc_spindle_off();
-
-        hal.driver_cap = driver_cap;
-        memcpy(&hal.spindle, &spindle_org, sizeof(spindle_ptrs_t));
-    }
-
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
-
-    if(!modbus_isup())
-        return false;
-
-    if((vfd_active = spindle_id == 1)) {
-
-        if(hal.spindle.set_state != spindleSetState) {
-
-            if(spindle_org.set_state == NULL) {
-                driver_cap = hal.driver_cap;
-                memcpy(&spindle_org, &hal.spindle, sizeof(spindle_ptrs_t));
-            }
-
-            if(spindle_org.set_state)
-                gc_spindle_off();
-
-            hal.spindle.set_state = spindleSetState;
-            hal.spindle.get_state = spindleGetState;
-            hal.spindle.update_rpm = spindleUpdateRPM;
-            hal.spindle.reset_data = NULL;
-
-            hal.driver_cap.variable_spindle = On;
-            hal.driver_cap.spindle_at_speed = On;
-            hal.driver_cap.spindle_dir = On;
-        }
+    if(spindle_id == gs20_spindle_id) {
 
         if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
 
-        if(!init_ok) {
-            init_ok = true;
-            spindleGetMaxRPM();
-        }
-    }
+    } else if(hal.spindle.get_data == spindleGetData)
+        hal.spindle.get_data = NULL;
+
+    if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;
 
     return true;
 }
 
 void GS20_init (void)
 {    
-    if(modbus_enabled()) {
 
-        on_spindle_select = grbl.on_spindle_select;
-        grbl.on_spindle_select = g20_spindle_select;
+    static const spindle_ptrs_t gs20_spindle = {
+        .cap.variable = On,
+        .cap.at_speed = On,
+        .cap.direction = On,
+        .config = gs20_spindle_config,
+        .set_state = spindleSetState,
+        .get_state = spindleGetState,
+        .update_rpm = spindleUpdateRPM
+    };
 
-        on_report_options = grbl.on_report_options;
-        grbl.on_report_options = onReportOptions;
+    if (vfd_config.vfd_type == MODVFD){
 
-        driver_reset = hal.driver_reset;
-        hal.driver_reset = g20_reset;
+    gs20_spindle_id = spindle_register(&gs20_spindle, "GS20");
+
+    on_spindle_select = grbl.on_spindle_select;
+    grbl.on_spindle_select = gs20_spindle_select;
+
+    on_report_options = grbl.on_report_options;
+    grbl.on_report_options = onReportOptions;
+
+    driver_reset = hal.driver_reset;
+    hal.driver_reset = gs20_reset;
+    
     }
 }
 

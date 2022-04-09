@@ -71,29 +71,35 @@ static const setting_group_detail_t vfd_groups [] = {
 static const setting_detail_t vfd_settings[] = {
      { Setting_VFD_TYPE, Group_UserSettings, "VFD Model", NULL, Format_RadioButtons, "Huanyang 1,Huanyang P2A,Durapulse GS20,Yalang YL620A, MODVFD Custom", NULL, NULL, Setting_NonCore, &vfd_config.vfd_type, NULL, NULL },  
      { Setting_VFD_RPM_HZ, Group_UserSettings, "RPM per Hz", "", Format_Integer, "####0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, NULL },
-     { Setting_UserDefined_10, Group_UserSettings, "Run/Stop Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.runstop_reg, NULL, NULL },  
-     { Setting_UserDefined_11, Group_UserSettings, "Set Frequency Register (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.set_freq_reg, NULL, NULL },    
-     { Setting_UserDefined_12, Group_UserSettings, "Get Frequency Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.get_freq_reg, NULL, NULL },  
-     { Setting_UserDefined_13, Group_UserSettings, "Run CW Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_cw_cmd, NULL, NULL },   
-     { Setting_UserDefined_14, Group_UserSettings, "Run CCW Command (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_ccw_cmd, NULL, NULL },  
-     { Setting_UserDefined_15, Group_UserSettings, "Stop Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.stop_cmd, NULL, NULL },   
-
+     { Setting_VFD_PLUGIN_10, Group_UserSettings, "Run/Stop Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.runstop_reg, NULL, NULL },  
+     { Setting_VFD_PLUGIN_11, Group_UserSettings, "Set Frequency Register (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.set_freq_reg, NULL, NULL },    
+     { Setting_VFD_PLUGIN_12, Group_UserSettings, "Get Frequency Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.get_freq_reg, NULL, NULL },  
+     { Setting_VFD_PLUGIN_13, Group_UserSettings, "Run CW Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_cw_cmd, NULL, NULL },   
+     { Setting_VFD_PLUGIN_14, Group_UserSettings, "Run CCW Command (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_ccw_cmd, NULL, NULL },  
+     { Setting_VFD_PLUGIN_15, Group_UserSettings, "Stop Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.stop_cmd, NULL, NULL },  
+     { Setting_VFD_PLUGIN_16, Group_UserSettings, "RPM input Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_multiplier, NULL, NULL }, 
+     { Setting_VFD_PLUGIN_17, Group_UserSettings, "RPM input Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_divider, NULL, NULL },  
+     { Setting_VFD_PLUGIN_18, Group_UserSettings, "RPM output Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_multiplier, NULL, NULL }, 
+     { Setting_VFD_PLUGIN_19, Group_UserSettings, "RPM output Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_divider, NULL, NULL },       
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t vfd_settings_descr[] = {
     { Setting_VFD_TYPE, "type of vfd" },
     { Setting_VFD_RPM_HZ, "rpm_hz" },
-    { Setting_UserDefined_10, "Register for Run/stop" },
-    { Setting_UserDefined_11, "Set Frequency Register" },
-    { Setting_UserDefined_12, "Register for Run/stop" },
-    { Setting_UserDefined_13, "Set Frequency Register" },
-    { Setting_UserDefined_14, "Register for Run/stop" },
-    { Setting_UserDefined_15, "Set Frequency Register" },        
+    { Setting_VFD_PLUGIN_10, "Register for Run/stop" },
+    { Setting_VFD_PLUGIN_11, "Set Frequency Register" },
+    { Setting_VFD_PLUGIN_12, "Get Frequency Register" },
+    { Setting_VFD_PLUGIN_13, "Command word for CW" },
+    { Setting_VFD_PLUGIN_14, "Command word for CCW" },
+    { Setting_VFD_PLUGIN_15, "Command word for stop" },   
+    { Setting_VFD_PLUGIN_16, "RPM value multiplier for programming RPM" },
+    { Setting_VFD_PLUGIN_17, "RPM value divider for programming RPM" },
+    { Setting_VFD_PLUGIN_18, "RPM value multiplier for reading RPM" },
+    { Setting_VFD_PLUGIN_19, "RPM value divider for reading RPM" },               
 };
 #endif
 
-// Write settings to non volatile storage (NVS).
 static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
     if(spindle_id == NULL) {
@@ -103,10 +109,10 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
             MODVFD_init();
             break;
             case GS20:
-            //GS20_init();
+            GS20_init();
             break;
             case YL620A:
-            //YL620_init();
+            YL620_init();
             break;
             case HUANYANG1:
             case HUANYANG2:
@@ -120,7 +126,6 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
     return true;
 }
 
-
 static void vfd_settings_save (void)
 {
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&vfd_config, sizeof(vfd_settings_t), true);
@@ -128,21 +133,24 @@ static void vfd_settings_save (void)
 
 static void vfd_settings_restore (void)
 {
-    vfd_config.vfd_type = HUANYANG1;
+    vfd_config.vfd_type = MODVFD; //settings below are defaulted to values for GS20 VFD
     vfd_config.vfd_rpm_hz = 60;
-    vfd_config.runstop_reg = 61;
-    vfd_config.set_freq_reg = 62;
-    vfd_config.get_freq_reg = 63;
-    vfd_config.run_cw_cmd = 64;
-    vfd_config.run_ccw_cmd = 65;
-    vfd_config.stop_cmd = 66;
+    vfd_config.runstop_reg = 8192; //0x2000
+    vfd_config.set_freq_reg = 8193; //0x2001
+    vfd_config.get_freq_reg = 8451; //0x2103
+    vfd_config.run_cw_cmd = 17; //0x11
+    vfd_config.run_ccw_cmd = 33; //0x21
+    vfd_config.stop_cmd = 2; //0x02
+    vfd_config.in_multiplier = 50;
+    vfd_config.in_divider = 60;
+    vfd_config.out_multiplier = 60;
+    vfd_config.out_divider = 100;    
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&vfd_config, sizeof(vfd_settings_t), true);
 }
 
 static void vfd_settings_load (void)
 {
-
     if(nvs_address != 0){
         if((hal.nvs.memcpy_from_nvs((uint8_t *)&vfd_config, nvs_address, sizeof(vfd_settings_t), true) != NVS_TransferResult_OK))
             vfd_settings_restore();

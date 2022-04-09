@@ -64,12 +64,16 @@ typedef enum {
 typedef struct {
     vfd_type_t vfd_type;
     uint32_t vfd_rpm_hz;
-    uint16_t runstop_reg;
-    uint16_t set_freq_reg;
-    uint16_t get_freq_reg;
-    uint16_t run_cw_cmd;
-    uint16_t run_ccw_cmd;
-    uint16_t stop_cmd;
+    uint32_t runstop_reg;
+    uint32_t set_freq_reg;
+    uint32_t get_freq_reg;
+    uint32_t run_cw_cmd;
+    uint32_t run_ccw_cmd;
+    uint32_t stop_cmd;
+    float in_multiplier;
+    float in_divider;
+    float out_multiplier;
+    float out_divider;    
 } vfd_settings_t;
 
 vfd_settings_t vfd_config;
