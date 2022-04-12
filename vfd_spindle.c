@@ -85,24 +85,24 @@ static const setting_detail_t vfd_settings[] = {
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t vfd_settings_descr[] = {
-    { Setting_VFD_TYPE, "type of vfd" },
-    { Setting_VFD_RPM_HZ, "rpm_hz" },
-    { Setting_VFD_PLUGIN_10, "Register for Run/stop" },
-    { Setting_VFD_PLUGIN_11, "Set Frequency Register" },
-    { Setting_VFD_PLUGIN_12, "Get Frequency Register" },
-    { Setting_VFD_PLUGIN_13, "Command word for CW" },
-    { Setting_VFD_PLUGIN_14, "Command word for CCW" },
-    { Setting_VFD_PLUGIN_15, "Command word for stop" },   
-    { Setting_VFD_PLUGIN_16, "RPM value multiplier for programming RPM" },
-    { Setting_VFD_PLUGIN_17, "RPM value divider for programming RPM" },
-    { Setting_VFD_PLUGIN_18, "RPM value multiplier for reading RPM" },
-    { Setting_VFD_PLUGIN_19, "RPM value divider for reading RPM" },               
+    { Setting_VFD_TYPE, "Choose from supported VFDs or use custom MODVFD" },
+    { Setting_VFD_RPM_HZ, "RPM/Hz value for GS20 and YL620A" },
+    { Setting_VFD_PLUGIN_10, "MODVFD Register for Run/stop" },
+    { Setting_VFD_PLUGIN_11, "MODVFD Set Frequency Register" },
+    { Setting_VFD_PLUGIN_12, "MODVFD Get Frequency Register" },
+    { Setting_VFD_PLUGIN_13, "MODVFD Command word for CW" },
+    { Setting_VFD_PLUGIN_14, "MODVFD Command word for CCW" },
+    { Setting_VFD_PLUGIN_15, "MODVFD Command word for stop" },   
+    { Setting_VFD_PLUGIN_16, "MODVFD RPM value multiplier for programming RPM" },
+    { Setting_VFD_PLUGIN_17, "MODVFD RPM value divider for programming RPM" },
+    { Setting_VFD_PLUGIN_18, "MODVFD RPM value multiplier for reading RPM" },
+    { Setting_VFD_PLUGIN_19, "MODVFD RPM value divider for reading RPM" },               
 };
 #endif
 
 static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == NULL) {
+    //if(spindle_id == NULL) {
 
         switch (vfd_config.vfd_type) {
             case MODVFD:
@@ -121,7 +121,7 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
             default:
             break;
         }
-    }
+    //}
 
     return true;
 }
@@ -133,7 +133,7 @@ static void vfd_settings_save (void)
 
 static void vfd_settings_restore (void)
 {
-    vfd_config.vfd_type = MODVFD; //settings below are defaulted to values for GS20 VFD
+    vfd_config.vfd_type = HUANYANG1; //settings below are defaulted to values for GS20 VFD
     vfd_config.vfd_rpm_hz = 60;
     vfd_config.runstop_reg = 8192; //0x2000
     vfd_config.set_freq_reg = 8193; //0x2001
@@ -192,9 +192,6 @@ void vfd_init (void)
         grbl.on_report_options = onReportOptions;
 
         settings_register(&vfd_setting_details);
-
-        //vfd_huanyang_init();
-        //MODVFD_init();
 
         on_spindle_select = grbl.on_spindle_select;
         grbl.on_spindle_select = vfd_spindle_select;

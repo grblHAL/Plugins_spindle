@@ -295,7 +295,7 @@ void GS20_init (void)
         .update_rpm = spindleUpdateRPM
     };
 
-    if (vfd_config.vfd_type == MODVFD){
+    if (vfd_config.vfd_type == GS20){
 
     gs20_spindle_id = spindle_register(&gs20_spindle, "GS20");
 

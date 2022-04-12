@@ -346,7 +346,7 @@ void YL620_init (void)
         .update_rpm = spindleUpdateRPM
     };
 
-    if (vfd_config.vfd_type == MODVFD){
+    if (vfd_config.vfd_type == YL620A){
 
     yl620_spindle_id = spindle_register(&yl620_spindle, "YL620");
 
