@@ -46,19 +46,20 @@
 
 #include "modbus.h"
 #include "vfd_spindle.h"
+#include "huanyang.h"
 
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
 
-static spindle_id_t v1_spindle_id = -1, v2_spindle_id = -1;
+//static spindle_id_t v1_spindle_id = -1, v2_spindle_id = -1;
 static bool v1_active = false,  v2_active = false;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static on_report_options_ptr on_report_options;
-static on_spindle_select_ptr on_spindle_select;
-static driver_reset_ptr driver_reset;
+//static on_report_options_ptr on_report_options;
+//static on_spindle_select_ptr on_spindle_select;
+//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 
 static void rx_exception (uint8_t code, void *context);
@@ -124,13 +125,13 @@ static void v1_spindleSetRPM (float rpm, bool block)
     }
 }
 
-static void v1_spindleUpdateRPM (float rpm)
+void huanyangv1_spindleUpdateRPM (float rpm)
 {
     v1_spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void v1_spindleSetState (spindle_state_t state, float rpm)
+void huanyangv1_spindleSetState (spindle_state_t state, float rpm)
 {
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
@@ -159,7 +160,7 @@ static spindle_data_t *v1_spindleGetData (spindle_data_request_t request)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t v1_spindleGetState (void)
+spindle_state_t huanyangv1_spindleGetState (void)
 {
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
@@ -208,7 +209,7 @@ static void v1_rx_packet (modbus_message_t *msg)
     }
 }
 
-bool v1_spindle_config (void)
+bool huanyangv1_spindle_config (void)
 {
     static bool init_ok = false;
 
@@ -283,13 +284,13 @@ static void v2_spindleSetRPM (float rpm, bool block)
     }
 }
 
-static void v2_spindleUpdateRPM (float rpm)
+void huanyangv2_spindleUpdateRPM (float rpm)
 {
     v2_spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void v2_spindleSetState (spindle_state_t state, float rpm)
+void huanyangv2_spindleSetState (spindle_state_t state, float rpm)
 {
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
@@ -313,7 +314,7 @@ static void v2_spindleSetState (spindle_state_t state, float rpm)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t v2_spindleGetState (void)
+ spindle_state_t huanyangv2_spindleGetState (void)
 {
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
@@ -361,7 +362,7 @@ static void v2_rx_packet (modbus_message_t *msg)
     }
 }
 
-bool v2_spindle_config (void)
+bool huanyangv2_spindle_config (void)
 {
     static bool init_ok = false;
 
@@ -398,33 +399,42 @@ static void rx_exception (uint8_t code, void *context)
         system_raise_alarm(Alarm_Spindle);
 }
 
-static void onReportOptions (bool newopt)
+void huanyang_onReportOptions (bool newopt)
 {
-    on_report_options(newopt);
+    //on_report_options(newopt);
 
     if(!newopt) {
-#if VFD_ENABLE == 1
-        hal.stream.write("[PLUGIN:HUANYANG v1 v0.07]" ASCII_EOL);
-#elif VFD_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.07]" ASCII_EOL);
-#else
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
-#endif
+        if(v1_active)
+            hal.stream.write("[PLUGIN:HUANYANG v1 v0.07]" ASCII_EOL);
+        
+        if(v2_active)
+            hal.stream.write("[PLUGIN:HUANYANG P2A v0.07]" ASCII_EOL);
     }
 }
 
-static void huanyang_reset (void)
+void huanyang_reset (void)
 {
-    driver_reset();
-        if(v1_active)
-            v1_spindleGetMaxRPM();
-        if(v2_active)
-            v2_spindleGetMaxRPM();
+#if VFD_ENABLE == 1 || VFD_ENABLE == -1
+    if(v1_active)
+        v1_spindleGetMaxRPM();
+#endif
+#if VFD_ENABLE == 2 || VFD_ENABLE == -1
+    if(v2_active)
+        v2_spindleGetMaxRPM();
+#endif
 }
 
-static bool huanyang_spindle_select (spindle_id_t spindle_id)
+bool huanyang_spindle_select (spindle_id_t spindle_id)
 {
-    if((v1_active = spindle_id == v1_spindle_id) || (v2_active = spindle_id == v2_spindle_id)) {
+    v1_active = false;
+    v2_active= false;
+
+    if (vfd_config.vfd_type == HUANYANG1)
+        v1_active = true;
+    else if (vfd_config.vfd_type == HUANYANG2)
+        v2_active = true;
+    
+    if(spindle_id == vfd_spindle_id) {
 
         if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
@@ -432,13 +442,13 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    /*if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;*/
 
     return true;
 }
 
-void vfd_huanyang_init (void)
+/*void vfd_huanyang_init (void)
 {
 
     static const spindle_ptrs_t v1_spindle = {
@@ -462,11 +472,11 @@ void vfd_huanyang_init (void)
     };
 
     if(modbus_enabled()) {
-        if (vfd_config.vfd_type == HUANYANG1){
+        //if (vfd_config.vfd_type == HUANYANG1){
             v1_spindle_id = spindle_register(&v1_spindle, "Huanyang v1");
-        } else if (vfd_config.vfd_type == HUANYANG2) {
+        //} else if (vfd_config.vfd_type == HUANYANG2) {
             v2_spindle_id = spindle_register(&v2_spindle, "Huanyang P2A");
-        }
+        //}
 
         if(v1_spindle_id != -1 || v2_spindle_id != -1) {
 
@@ -480,6 +490,6 @@ void vfd_huanyang_init (void)
             hal.driver_reset = huanyang_reset;
         }
     }
-}
+}*/
 
 #endif

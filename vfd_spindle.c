@@ -49,6 +49,11 @@
 #include "modbus.h"
 #include "vfd_spindle.h"
 
+#include "GS20_VFD.h"
+#include "MODVFD.h"
+#include "YL620_VFD.h"
+#include "huanyang.h"
+
 #ifdef SPINDLE_PWM_DIRECT
 #error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
 #endif
@@ -59,6 +64,18 @@
 
 static on_spindle_select_ptr on_spindle_select;
 static nvs_address_t nvs_address = 0;
+static driver_reset_ptr driver_reset;
+
+static on_report_options_ptr on_report_options;
+extern modbus_settings_t modbus;
+
+/*static void rx_packet (modbus_message_t *msg);
+static void rx_exception (uint8_t code, void *context);
+
+static const modbus_callbacks_t callbacks = {
+    .on_rx_packet = rx_packet,
+    .on_rx_exception = rx_exception
+};*/
 
 
 // Add info about our settings for $help and enumerations.
@@ -99,32 +116,6 @@ static const setting_descr_t vfd_settings_descr[] = {
     { Setting_VFD_PLUGIN_19, "MODVFD RPM value divider for reading RPM" },               
 };
 #endif
-
-static bool vfd_spindle_select (spindle_id_t spindle_id)
-{
-    //if(spindle_id == NULL) {
-
-        switch (vfd_config.vfd_type) {
-            case MODVFD:
-            MODVFD_init();
-            break;
-            case GS20:
-            GS20_init();
-            break;
-            case YL620A:
-            YL620_init();
-            break;
-            case HUANYANG1:
-            case HUANYANG2:
-            vfd_huanyang_init();
-            break;            
-            default:
-            break;
-        }
-    //}
-
-    return true;
-}
 
 static void vfd_settings_save (void)
 {
@@ -171,30 +162,215 @@ static setting_details_t vfd_setting_details = {
     .save = vfd_settings_save
 };
 
-static on_report_options_ptr on_report_options;
+void vfd_spindleUpdateRPM (float rpm)
+{
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            modvfd_spindleUpdateRPM(rpm);
+        break;
+        case GS20:
+            gs20_spindleUpdateRPM(rpm);
+        break;
+        case YL620A:
+            yl620_spindleUpdateRPM(rpm);
+        break;
+        case HUANYANG1:
+            huanyangv1_spindleUpdateRPM(rpm);
+            break;
+        case HUANYANG2:
+            huanyangv2_spindleUpdateRPM(rpm);
+        break;            
+        default:
+        break;
+    }    
+}
 
-extern modbus_settings_t modbus;
+static void vfd_spindleSetState (spindle_state_t state, float rpm){
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            modvfd_spindleSetState (state, rpm);
+        break;
+        case GS20:
+            gs20_spindleSetState (state, rpm);
+        break;
+        case YL620A:
+            yl620_spindleSetState (state, rpm);
+        break;
+        case HUANYANG1:
+            return huanyangv1_spindleSetState(state, rpm);
+        break;
+        case HUANYANG2:
+            return huanyangv2_spindleSetState(state, rpm);
+        break;            
+        default:
+        break;
+    }
+}
 
-static void onReportOptions (bool newopt)
+static spindle_state_t vfd_spindleGetState (void) {
+
+    spindle_state_t vfd_state = {0};
+
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            vfd_state = modvfd_spindleGetState();
+        break;
+        case GS20:
+            vfd_state = gs20_spindleGetState();
+        break;
+        case YL620A:
+            vfd_state = yl620_spindleGetState();
+        break;
+        case HUANYANG1:
+            vfd_state = huanyangv1_spindleGetState();
+        break;
+        case HUANYANG2:
+            vfd_state = huanyangv2_spindleGetState();
+        break;            
+        default:
+        break;
+    }
+
+     return vfd_state;
+}
+
+static void vfd_onReportOptions (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt) {
         hal.stream.write("[PLUGIN:VFD SELECTOR v0.02]" ASCII_EOL);
+
+        switch (vfd_config.vfd_type) {
+            case MODVFD:
+                modvfd_OnReportOptions(newopt);
+            break;
+            case GS20:
+                gs20_onReportOptions(newopt);
+            break;
+            case YL620A:
+                yl620_onReportOptions(newopt);
+            break;
+            case HUANYANG1:
+            case HUANYANG2:
+                huanyang_onReportOptions(newopt);
+            break;            
+            default:
+            break;
+        }        
+    }
+}
+
+static bool vfd_spindle_select (spindle_id_t spindle_id){
+
+    bool select_ok = false;
+
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            select_ok = modvfd_spindle_select(spindle_id);
+        break;
+        case GS20:
+            select_ok = gs20_spindle_select(spindle_id);
+        break;
+        case YL620A:
+            select_ok = yl620_spindle_select(spindle_id);
+        break;
+        case HUANYANG1:
+        case HUANYANG2:
+            select_ok = huanyang_spindle_select(spindle_id);
+        break;            
+        default:
+        break;
+    }
+
+    if(select_ok && on_spindle_select && on_spindle_select(spindle_id))
+        return true;
+
+    return select_ok;
+}
+
+static bool vfd_spindle_config (void)
+{
+    static bool init_ok = false;
+
+    if(!modbus_isup())
+        return false;
+
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            init_ok = modvfd_spindle_config();
+        break;
+        case GS20:
+            init_ok = gs20_spindle_config();
+        break;
+        case YL620A:
+            init_ok = yl620_spindle_config();
+        break;
+        case HUANYANG1:
+            init_ok = huanyangv1_spindle_config();
+        break;
+        case HUANYANG2:
+            init_ok = huanyangv2_spindle_config();
+        break;            
+        default:
+        break;
+    }  
+
+    return init_ok;        
+}
+
+static void vfd_reset (void)
+{
+
+    driver_reset();
+
+    switch (vfd_config.vfd_type) {
+        case MODVFD:
+            modvfd_reset();
+        break;
+        case GS20:
+            gs20_reset();
+        break;
+        case YL620A:
+            yl620_reset();
+        break;
+        case HUANYANG1:
+        case HUANYANG2:
+            huanyang_reset();
+        break;            
+        default:
+        break;
     }
 }
 
 void vfd_init (void)
 {
+    vfd_spindle_id = -1;
+
+    static const spindle_ptrs_t vfd_spindle = {
+        .cap.variable = On,
+        .cap.at_speed = On,
+        .cap.direction = On,
+        .config = vfd_spindle_config,
+        .set_state = vfd_spindleSetState,
+        .get_state = vfd_spindleGetState,
+        .update_rpm = vfd_spindleUpdateRPM
+    };
+
     if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
 
-        on_report_options = grbl.on_report_options;
-        grbl.on_report_options = onReportOptions;
-
-        settings_register(&vfd_setting_details);
+        vfd_spindle_id = spindle_register(&vfd_spindle, "VFD Spindle");
 
         on_spindle_select = grbl.on_spindle_select;
         grbl.on_spindle_select = vfd_spindle_select;
+
+        on_report_options = grbl.on_report_options;
+        grbl.on_report_options = vfd_onReportOptions;
+
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = vfd_reset;
+
+        settings_register(&vfd_setting_details);
         
     }
 }

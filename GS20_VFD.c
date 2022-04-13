@@ -21,6 +21,7 @@
 
 */
 
+
 #ifdef ARDUINO
 #include "../driver.h"
 #else
@@ -46,27 +47,28 @@
 
 #include "modbus.h"
 #include "vfd_spindle.h"
+#include "GS20_VFD.h"
 
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
 
-static spindle_id_t gs20_spindle_id = -1;
+//static spindle_id_t gs20_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static on_report_options_ptr on_report_options;
-static on_spindle_select_ptr on_spindle_select;
-static driver_reset_ptr driver_reset;
+//static on_report_options_ptr on_report_options;
+//static on_spindle_select_ptr on_spindle_select;
+//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
-static void rx_packet (modbus_message_t *msg);
-static void rx_exception (uint8_t code, void *context);
+static void gs20_rx_packet (modbus_message_t *msg);
+static void gs20_rx_exception (uint8_t code, void *context);
 
 static const modbus_callbacks_t callbacks = {
-    .on_rx_packet = rx_packet,
-    .on_rx_exception = rx_exception
+    .on_rx_packet = gs20_rx_packet,
+    .on_rx_exception = gs20_rx_exception
 };
 
 // To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
@@ -103,13 +105,13 @@ static void spindleSetRPM (float rpm, bool block)
         rpm_programmed = rpm;
 }
 
-static void spindleUpdateRPM (float rpm)
+void gs20_spindleUpdateRPM (float rpm)
 {
     spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void spindleSetState (spindle_state_t state, float rpm)
+void gs20_spindleSetState (spindle_state_t state, float rpm)
 {
     uint8_t runstop = 0;
     uint8_t direction = 0;
@@ -147,13 +149,13 @@ static void spindleSetState (spindle_state_t state, float rpm)
         spindleSetRPM(rpm, true);
 }
 
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
+static spindle_data_t *gs20_spindleGetData (spindle_data_request_t request)
 {
     return &spindle_data;
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t spindleGetState (void)
+spindle_state_t gs20_spindleGetState (void)
 {
 
     modbus_message_t mode_cmd = {
@@ -174,7 +176,7 @@ static spindle_state_t spindleGetState (void)
     
 
     // Get the actual RPM from spindle encoder input when available.
-    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
+    if(hal.spindle.get_data && hal.spindle.get_data != gs20_spindleGetData) {
         float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
         vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
     }
@@ -182,7 +184,7 @@ static spindle_state_t spindleGetState (void)
     return vfd_state; // return previous state as we do not want to wait for the response
 }
 
-static void rx_packet (modbus_message_t *msg)
+static void gs20_rx_packet (modbus_message_t *msg)
 {
     if(!(msg->adu[0] & 0x80)) {
 
@@ -217,7 +219,7 @@ static void raise_alarm (uint_fast16_t state)
     system_raise_alarm(Alarm_Spindle);
 }
 
-static void rx_exception (uint8_t code, void *context)
+static void gs20_rx_exception (uint8_t code, void *context)
 {
     // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
     // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
@@ -252,37 +254,37 @@ static void rx_exception (uint8_t code, void *context)
     }
 }
 
-static void onReportOptions (bool newopt)
+void gs20_onReportOptions (bool newopt)
 {
-    on_report_options(newopt);
+    //on_report_options(newopt);
 
     if(!newopt) {
         hal.stream.write("[PLUGIN:Durapulse VFD G20 v0.03]" ASCII_EOL);
     }
 }
 
-static void gs20_reset (void)
+void gs20_reset (void)
 {
-    driver_reset();
+    
 }
 
-static bool gs20_spindle_select (spindle_id_t spindle_id)
+bool gs20_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == gs20_spindle_id) {
+    if(spindle_id == vfd_spindle_id) {
 
         if(settings.spindle.ppr == 0)
-            hal.spindle.get_data = spindleGetData;
+            hal.spindle.get_data = gs20_spindleGetData;
 
-    } else if(hal.spindle.get_data == spindleGetData)
+    } else if(hal.spindle.get_data == gs20_spindleGetData)
         hal.spindle.get_data = NULL;
 
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    /*if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;*/
 
     return true;
 }
 
-void GS20_init (void)
+/*void GS20_init (void)
 {    
 
     static const spindle_ptrs_t gs20_spindle = {
@@ -290,9 +292,9 @@ void GS20_init (void)
         .cap.at_speed = On,
         .cap.direction = On,
         .config = gs20_spindle_config,
-        .set_state = spindleSetState,
-        .get_state = spindleGetState,
-        .update_rpm = spindleUpdateRPM
+        .set_state = gs20_spindleSetState,
+        .get_state = gs20_spindleGetState,
+        .update_rpm = gs20_spindleUpdateRPM
     };
 
     if (vfd_config.vfd_type == GS20){
@@ -303,12 +305,12 @@ void GS20_init (void)
     grbl.on_spindle_select = gs20_spindle_select;
 
     on_report_options = grbl.on_report_options;
-    grbl.on_report_options = onReportOptions;
+    grbl.on_report_options = gs20_onReportOptions;
 
     driver_reset = hal.driver_reset;
     hal.driver_reset = gs20_reset;
     
     }
-}
+}*/
 
 #endif

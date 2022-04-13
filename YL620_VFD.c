@@ -91,6 +91,7 @@
 
 #include "modbus.h"
 #include "vfd_spindle.h"
+#include "YL620_VFD.h"
 
 #ifdef SPINDLE_PWM_DIRECT
 #error "Uncomment SPINDLE_RPM_CONTROLLED in grbl/config.h to add Huanyang spindle support!"
@@ -104,9 +105,9 @@ static spindle_id_t yl620_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static on_report_options_ptr on_report_options;
-static on_spindle_select_ptr on_spindle_select;
-static driver_reset_ptr driver_reset;
+//static on_report_options_ptr on_report_options;
+//static on_spindle_select_ptr on_spindle_select;
+//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
@@ -152,13 +153,13 @@ static void spindleSetRPM (float rpm, bool block)
         rpm_programmed = rpm;
 }
 
-static void spindleUpdateRPM (float rpm)
+void yl620_spindleUpdateRPM (float rpm)
 {
     spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void spindleSetState (spindle_state_t state, float rpm)
+void yl620_spindleSetState (spindle_state_t state, float rpm)
 {
     uint8_t runstop = 0;
     uint8_t direction = 0;
@@ -202,7 +203,7 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t spindleGetState (void)
+spindle_state_t yl620_spindleGetState (void)
 {
 
     modbus_message_t mode_cmd = {
@@ -303,21 +304,21 @@ static void rx_exception (uint8_t code, void *context)
     }
 }
 
-static void onReportOptions (bool newopt)
+void yl620_onReportOptions (bool newopt)
 {
-    on_report_options(newopt);
+    //on_report_options(newopt);
 
     if(!newopt) {
         hal.stream.write("[PLUGIN:Yalang VFD YL620A v0.01]" ASCII_EOL);
     }
 }
 
-static void yl620_reset (void)
+void yl620_reset (void)
 {
-    driver_reset();
+
 }
 
-static bool yl620_spindle_select (spindle_id_t spindle_id)
+bool yl620_spindle_select (spindle_id_t spindle_id)
 {
     if(spindle_id == yl620_spindle_id) {
 
@@ -327,13 +328,13 @@ static bool yl620_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    /*if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;*/
 
     return true;
 }
 
-void YL620_init (void)
+/*void YL620_init (void)
 {    
 
     static const spindle_ptrs_t yl620_spindle = {
@@ -346,7 +347,7 @@ void YL620_init (void)
         .update_rpm = spindleUpdateRPM
     };
 
-    if (vfd_config.vfd_type == YL620A){
+    //if (vfd_config.vfd_type == YL620A){
 
     yl620_spindle_id = spindle_register(&yl620_spindle, "YL620");
 
@@ -359,7 +360,7 @@ void YL620_init (void)
     driver_reset = hal.driver_reset;
     hal.driver_reset = yl620_reset;
     
-    }
-}
+    //}
+}*/
 
 #endif

@@ -49,6 +49,7 @@
 
 #include "modbus.h"
 #include "vfd_spindle.h"
+#include "MODVFD.h"
 
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
@@ -58,9 +59,9 @@ static spindle_id_t modvfd_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static on_report_options_ptr on_report_options;
-static on_spindle_select_ptr on_spindle_select;
-static driver_reset_ptr driver_reset;
+//static on_report_options_ptr on_report_options;
+//static on_spindle_select_ptr on_spindle_select;
+//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
@@ -106,13 +107,13 @@ static void spindleSetRPM (float rpm, bool block)
         rpm_programmed = rpm;
 }
 
-static void spindleUpdateRPM (float rpm)
+void modvfd_spindleUpdateRPM (float rpm)
 {
     spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void spindleSetState (spindle_state_t state, float rpm)
+void modvfd_spindleSetState (spindle_state_t state, float rpm)
 {
     uint8_t runstop = 0;
 
@@ -153,7 +154,7 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t spindleGetState (void)
+spindle_state_t modvfd_spindleGetState (void)
 {
 
     modbus_message_t mode_cmd = {
@@ -253,21 +254,21 @@ static void rx_exception (uint8_t code, void *context)
     }
 }
 
-static void onReportOptions (bool newopt)
+void modvfd_OnReportOptions (bool newopt)
 {
-    on_report_options(newopt);
+    //on_report_options(newopt);
 
     if(!newopt) {
         hal.stream.write("[PLUGIN:MODVFD v0.02]" ASCII_EOL);
     }
 }
 
-static void MODVFD_reset (void)
+void modvfd_reset (void)
 {
-    driver_reset();
+
 }
 
-static bool MODVFD_spindle_select (spindle_id_t spindle_id)
+bool modvfd_spindle_select (spindle_id_t spindle_id)
 {
     if(spindle_id == modvfd_spindle_id) {
 
@@ -277,13 +278,13 @@ static bool MODVFD_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    /*if(on_spindle_select && on_spindle_select(spindle_id))
+        return true;*/
 
     return true;
 }
 
-void MODVFD_init (void)
+/*void MODVFD_init (void)
 {    
 
     static const spindle_ptrs_t modvfd_spindle = {
@@ -296,7 +297,7 @@ void MODVFD_init (void)
         .update_rpm = spindleUpdateRPM
     };
 
-    if (vfd_config.vfd_type == MODVFD){
+    //if (vfd_config.vfd_type == MODVFD){
 
     modvfd_spindle_id = spindle_register(&modvfd_spindle, "MODVFD");
 
@@ -309,7 +310,7 @@ void MODVFD_init (void)
     driver_reset = hal.driver_reset;
     hal.driver_reset = MODVFD_reset;
     
-    }
-}
+    //}
+}*/
 
 #endif

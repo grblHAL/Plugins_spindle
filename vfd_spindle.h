@@ -77,6 +77,7 @@ typedef struct {
 } vfd_settings_t;
 
 vfd_settings_t vfd_config;
+spindle_id_t vfd_spindle_id;
 
 void GS20_init (void);
 void YL620_init (void);
