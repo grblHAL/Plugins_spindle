@@ -129,9 +129,9 @@ static void vfd_settings_restore (void)
     vfd_config.runstop_reg = 8192; //0x2000
     vfd_config.set_freq_reg = 8193; //0x2001
     vfd_config.get_freq_reg = 8451; //0x2103
-    vfd_config.run_cw_cmd = 17; //0x11
-    vfd_config.run_ccw_cmd = 33; //0x21
-    vfd_config.stop_cmd = 2; //0x02
+    vfd_config.run_cw_cmd = 18; //0x12
+    vfd_config.run_ccw_cmd = 34; //0x22
+    vfd_config.stop_cmd = 1; //0x02
     vfd_config.in_multiplier = 50;
     vfd_config.in_divider = 60;
     vfd_config.out_multiplier = 60;

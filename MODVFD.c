@@ -59,9 +59,6 @@ static spindle_id_t modvfd_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-//static on_report_options_ptr on_report_options;
-//static on_spindle_select_ptr on_spindle_select;
-//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
@@ -278,39 +275,7 @@ bool modvfd_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    /*if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;*/
-
     return true;
 }
-
-/*void MODVFD_init (void)
-{    
-
-    static const spindle_ptrs_t modvfd_spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = modvfd_spindle_config,
-        .set_state = spindleSetState,
-        .get_state = spindleGetState,
-        .update_rpm = spindleUpdateRPM
-    };
-
-    //if (vfd_config.vfd_type == MODVFD){
-
-    modvfd_spindle_id = spindle_register(&modvfd_spindle, "MODVFD");
-
-    on_spindle_select = grbl.on_spindle_select;
-    grbl.on_spindle_select = MODVFD_spindle_select;
-
-    on_report_options = grbl.on_report_options;
-    grbl.on_report_options = onReportOptions;
-
-    driver_reset = hal.driver_reset;
-    hal.driver_reset = MODVFD_reset;
-    
-    //}
-}*/
 
 #endif

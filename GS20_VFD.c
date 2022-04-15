@@ -52,14 +52,9 @@
 #ifndef VFD_ADDRESS
 #define VFD_ADDRESS 0x01
 #endif
-
-//static spindle_id_t gs20_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-//static on_report_options_ptr on_report_options;
-//static on_spindle_select_ptr on_spindle_select;
-//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
@@ -278,39 +273,7 @@ bool gs20_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == gs20_spindleGetData)
         hal.spindle.get_data = NULL;
 
-    /*if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;*/
-
     return true;
 }
-
-/*void GS20_init (void)
-{    
-
-    static const spindle_ptrs_t gs20_spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = gs20_spindle_config,
-        .set_state = gs20_spindleSetState,
-        .get_state = gs20_spindleGetState,
-        .update_rpm = gs20_spindleUpdateRPM
-    };
-
-    if (vfd_config.vfd_type == GS20){
-
-    gs20_spindle_id = spindle_register(&gs20_spindle, "GS20");
-
-    on_spindle_select = grbl.on_spindle_select;
-    grbl.on_spindle_select = gs20_spindle_select;
-
-    on_report_options = grbl.on_report_options;
-    grbl.on_report_options = gs20_onReportOptions;
-
-    driver_reset = hal.driver_reset;
-    hal.driver_reset = gs20_reset;
-    
-    }
-}*/
 
 #endif

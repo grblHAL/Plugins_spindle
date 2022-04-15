@@ -67,7 +67,7 @@ typedef struct queue_entry {
 static const uint32_t baud[]    = { 2400, 4800, 9600, 19200, 38400, 115200 };
 
 // Testing Huanyang VFDs (with other devices on the bus) has shown failure to respond if silent period is < 6ms
-#if VFD_ENABLE == 1
+#if VFD_ENABLE == 1 || VFD_ENABLE == -1
 static const uint16_t silence[] = {   16,    8,    6,     6,     6,      6 };
 #else
 static const uint16_t silence[] = {   16,    8,    4,     2,     2,      2 };

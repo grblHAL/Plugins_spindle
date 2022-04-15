@@ -52,14 +52,10 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-//static spindle_id_t v1_spindle_id = -1, v2_spindle_id = -1;
 static bool v1_active = false,  v2_active = false;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-//static on_report_options_ptr on_report_options;
-//static on_spindle_select_ptr on_spindle_select;
-//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 
 static void rx_exception (uint8_t code, void *context);

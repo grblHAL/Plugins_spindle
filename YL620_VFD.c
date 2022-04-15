@@ -105,9 +105,6 @@ static spindle_id_t yl620_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-//static on_report_options_ptr on_report_options;
-//static on_spindle_select_ptr on_spindle_select;
-//static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
@@ -328,39 +325,7 @@ bool yl620_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    /*if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;*/
-
     return true;
 }
-
-/*void YL620_init (void)
-{    
-
-    static const spindle_ptrs_t yl620_spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = yl620_spindle_config,
-        .set_state = spindleSetState,
-        .get_state = spindleGetState,
-        .update_rpm = spindleUpdateRPM
-    };
-
-    //if (vfd_config.vfd_type == YL620A){
-
-    yl620_spindle_id = spindle_register(&yl620_spindle, "YL620");
-
-    on_spindle_select = grbl.on_spindle_select;
-    grbl.on_spindle_select = yl620_spindle_select;
-
-    on_report_options = grbl.on_report_options;
-    grbl.on_report_options = onReportOptions;
-
-    driver_reset = hal.driver_reset;
-    hal.driver_reset = yl620_reset;
-    
-    //}
-}*/
 
 #endif
