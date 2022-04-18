@@ -101,7 +101,6 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-static spindle_id_t yl620_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
@@ -317,7 +316,7 @@ void yl620_reset (void)
 
 bool yl620_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == yl620_spindle_id) {
+    if(spindle_id == vfd_spindle_id) {
 
         if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;

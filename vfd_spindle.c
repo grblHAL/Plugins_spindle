@@ -124,7 +124,7 @@ static void vfd_settings_save (void)
 
 static void vfd_settings_restore (void)
 {
-    vfd_config.vfd_type = HUANYANG1; //settings below are defaulted to values for GS20 VFD
+    vfd_config.vfd_type = HUANYANG1; //MODVFD settings below are defaulted to values for GS20 VFD
     vfd_config.vfd_rpm_hz = 60;
     vfd_config.runstop_reg = 8192; //0x2000
     vfd_config.set_freq_reg = 8193; //0x2001

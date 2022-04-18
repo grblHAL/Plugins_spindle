@@ -55,19 +55,18 @@
 #define VFD_ADDRESS 0x01
 #endif
 
-static spindle_id_t modvfd_spindle_id = -1;
 static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
 static uint32_t rpm_max = 0;
 static uint16_t retry_counter = 0;
 
-static void rx_packet (modbus_message_t *msg);
-static void rx_exception (uint8_t code, void *context);
+static void modvfd_rx_packet (modbus_message_t *msg);
+static void modvfd_rx_exception (uint8_t code, void *context);
 
 static const modbus_callbacks_t callbacks = {
-    .on_rx_packet = rx_packet,
-    .on_rx_exception = rx_exception
+    .on_rx_packet = modvfd_rx_packet,
+    .on_rx_exception = modvfd_rx_exception
 };
 
 // To-do, this should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
@@ -76,7 +75,7 @@ bool modvfd_spindle_config (void)
     return 1;
 }
 
-static void spindleSetRPM (float rpm, bool block)
+static void modvfd_spindleSetRPM (float rpm, bool block)
 {
         uint16_t data = ((uint32_t)(rpm)) / vfd_config.in_divider * vfd_config.in_multiplier;
 
@@ -106,7 +105,7 @@ static void spindleSetRPM (float rpm, bool block)
 
 void modvfd_spindleUpdateRPM (float rpm)
 {
-    spindleSetRPM(rpm, false);
+    modvfd_spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
@@ -142,10 +141,10 @@ void modvfd_spindleSetState (spindle_state_t state, float rpm)
     vfd_state.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
-        spindleSetRPM(rpm, true);
+        modvfd_spindleSetRPM(rpm, true);
 }
 
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
+static spindle_data_t *modvfd_spindleGetData (spindle_data_request_t request)
 {
     return &spindle_data;
 }
@@ -153,13 +152,15 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 // Returns spindle state in a spindle_state_t variable
 spindle_state_t modvfd_spindleGetState (void)
 {
+    static uint32_t last_ms;
+    uint32_t ms = hal.get_elapsed_ticks();
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
         .adu[0] = VFD_ADDRESS,
         .adu[1] = ModBus_ReadHoldingRegisters,
-        .adu[2] = vfd_config.get_freq_reg >> 8,
+        .adu[2] = vfd_config.get_freq_reg >> 8 & 0xFF,
         .adu[3] = vfd_config.get_freq_reg & 0xFF,
         .adu[4] = 0x00,
         .adu[5] = 0x01,
@@ -167,26 +168,28 @@ spindle_state_t modvfd_spindleGetState (void)
         .rx_length = 7
     };
 
-    modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
-    
+    if(ms > (last_ms + VFD_RETRY_DELAY)){ //don't spam the port
+        modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
+        last_ms = ms;
+    }    
 
     // Get the actual RPM from spindle encoder input when available.
-    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
+    if(hal.spindle.get_data && hal.spindle.get_data != modvfd_spindleGetData) {
         float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
         vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
     }
-
+    
     return vfd_state; // return previous state as we do not want to wait for the response
 }
 
-static void rx_packet (modbus_message_t *msg)
+static void modvfd_rx_packet (modbus_message_t *msg)
 {
     if(!(msg->adu[0] & 0x80)) {
 
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[3] << 8) | msg->adu[4])*vfd_config.vfd_rpm_hz;
+                spindle_data.rpm = ((float)((msg->adu[3] << 8) | msg->adu[4]))*(vfd_config.out_multiplier/vfd_config.out_divider);
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 retry_counter = 0;
                 break;
@@ -216,7 +219,7 @@ static void raise_alarm (uint_fast16_t state)
     system_raise_alarm(Alarm_Spindle);
 }
 
-static void rx_exception (uint8_t code, void *context)
+static void modvfd_rx_exception (uint8_t code, void *context)
 {
     // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
     // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
@@ -267,12 +270,12 @@ void modvfd_reset (void)
 
 bool modvfd_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == modvfd_spindle_id) {
+    if(spindle_id == vfd_spindle_id) {
 
         if(settings.spindle.ppr == 0)
-            hal.spindle.get_data = spindleGetData;
+            hal.spindle.get_data = modvfd_spindleGetData;
 
-    } else if(hal.spindle.get_data == spindleGetData)
+    } else if(hal.spindle.get_data == modvfd_spindleGetData)
         hal.spindle.get_data = NULL;
 
     return true;
