@@ -41,7 +41,7 @@
 #endif
 
 #define VFD_RETRIES     25
-#define VFD_RETRY_DELAY 	80
+#define VFD_RETRY_DELAY 	100
 
 typedef enum {
     VFD_Idle = 0,
