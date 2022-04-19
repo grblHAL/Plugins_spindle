@@ -162,6 +162,10 @@ static spindle_data_t *v1_spindleGetData (spindle_data_request_t request)
 // Returns spindle state in a spindle_state_t variable
 spindle_state_t huanyangv1_spindleGetState (void)
 {
+
+    static uint32_t last_ms;
+    uint32_t ms = hal.get_elapsed_ticks();
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -173,7 +177,10 @@ spindle_state_t huanyangv1_spindleGetState (void)
         .rx_length = 8
     };
 
-    modbus_send(&mode_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
+     if(ms > (last_ms + VFD_RETRY_DELAY)){ //don't spam the port
+        modbus_send(&mode_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
+        last_ms = ms;
+     }
 
     // Get the actual RPM from spindle encoder input when available.
     if(hal.spindle.get_data && hal.spindle.get_data != v1_spindleGetData) {
@@ -316,6 +323,10 @@ void huanyangv2_spindleSetState (spindle_state_t state, float rpm)
 // Returns spindle state in a spindle_state_t variable
  spindle_state_t huanyangv2_spindleGetState (void)
 {
+    
+    static uint32_t last_ms;
+    uint32_t ms = hal.get_elapsed_ticks();
+        
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -329,7 +340,10 @@ void huanyangv2_spindleSetState (spindle_state_t state, float rpm)
         .rx_length = 8
     };
 
-    modbus_send(&mode_cmd, &v2_callbacks, false); // TODO: add flag for not raising alarm?
+     if(ms > (last_ms + VFD_RETRY_DELAY)){ //don't spam the port
+        modbus_send(&mode_cmd, &v2_callbacks, false); // TODO: add flag for not raising alarm?
+        last_ms = ms;
+     }
 
     // Get the actual RPM from spindle encoder input when available.
     if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
