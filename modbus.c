@@ -278,9 +278,12 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
         bool poll = true;
 
+        grbl.on_execute_realtime(state_get());
+
         while(state != ModBus_Idle) {
+
             grbl.on_execute_realtime(state_get());
-            if(ABORTED)
+            if(sys.abort)
                 return false;
         }
 
@@ -302,7 +305,7 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
             grbl.on_execute_realtime(state_get());
 
-            if(ABORTED)
+            if(sys.abort)
                 poll = false;
 
             else switch(state) {
@@ -353,14 +356,19 @@ static void modbus_reset (void)
 {
     while(spin_lock);
 
-    packet = NULL;
-    tail = head;
+    if(sys.abort) {
 
-    silence_until = 0;
-    state = ModBus_Idle;
+        packet = NULL;
+        tail = head;
 
-    stream.flush_tx_buffer();
-    stream.flush_rx_buffer();
+        silence_until = 0;
+        state = ModBus_Idle;
+
+        stream.flush_tx_buffer();
+        stream.flush_rx_buffer();
+
+    } else while(state != ModBus_Idle)
+        modbus_poll();
 
     driver_reset();
 }
@@ -439,7 +447,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.12]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.13]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
