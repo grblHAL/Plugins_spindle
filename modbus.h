@@ -31,6 +31,8 @@
 #define MODBUS_QUEUE_LENGTH 8
 #endif
 
+#include <stdint.h>
+
 typedef enum {
     ModBus_Idle,
     ModBus_Silent,
@@ -68,6 +70,18 @@ typedef struct {
     void (*on_rx_exception)(uint8_t code, void *context);
 } modbus_callbacks_t;
 
+typedef union {
+    uint16_t timeout[6];
+    struct {
+        uint16_t b2400;
+        uint16_t b4800;
+        uint16_t b9600;
+        uint16_t b19200;
+        uint16_t b38400;
+        uint16_t b115200;
+    };
+} modbus_silence_timeout_t;
+
 typedef void (*stream_set_direction_ptr)(bool tx);
 
 typedef struct {
@@ -84,6 +98,7 @@ typedef struct {
 void modbus_init (void);
 bool modbus_isup (void);
 bool modbus_enabled (void);
+void modbus_set_silence (const modbus_silence_timeout_t *timeout);
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
 modbus_state_t modbus_get_state (void);
 

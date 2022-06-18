@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2021 Terje Io
+  Copyright (c) 2020-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -21,44 +21,14 @@
 
 */
 
-#ifdef ARDUINO
-#include "../driver.h"
-#else
-#include "driver.h"
-#endif
+#include "../shared.h"
 
-#if VFD_ENABLE == 1 || VFD_ENABLE == 2 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_HUANYANG2
 
 #include <math.h>
 #include <string.h>
 
-#ifdef ARDUINO
-#include "../grbl/hal.h"
-#include "../grbl/protocol.h"
-#include "../grbl/state_machine.h"
-#include "../grbl/report.h"
-#else
-#include "grbl/hal.h"
-#include "grbl/protocol.h"
-#include "grbl/state_machine.h"
-#include "grbl/report.h"
-#endif
-
-#include "modbus.h"
-
-#ifndef VFD_ADDRESS
-#define VFD_ADDRESS 0x01
-#endif
-
-typedef enum {
-    VFD_Idle = 0,
-    VFD_GetRPM,
-    VFD_SetRPM,
-    VFD_GetMaxRPM,
-    VFD_GetMaxRPM50,
-    VFD_GetStatus,
-    VFD_SetStatus
-} vfd_response_t;
+#include "spindle.h"
 
 static spindle_id_t v1_spindle_id = -1, v2_spindle_id = -1;
 static bool v1_active = false,  v2_active = false;
@@ -73,11 +43,21 @@ static uint32_t rpm_max = 0;
 static void rx_exception (uint8_t code, void *context);
 static spindle_data_t *spindleGetData (spindle_data_request_t request);
 
-#if VFD_ENABLE == 1 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
 
 static float rpm_max50 = 3000;
-
 static void v1_rx_packet (modbus_message_t *msg);
+
+// Testing Huanyang VFDs (with other devices on the bus) has shown failure to respond if silent period is < 6ms
+static const modbus_silence_timeout_t v1_silence =
+{
+    .b2400   = 16,
+    .b4800   = 8,
+    .b9600   = 6,
+    .b19200  = 6,
+    .b38400  = 6,
+    .b115200 = 6
+};
 
 static const modbus_callbacks_t v1_callbacks = {
     .on_rx_packet = v1_rx_packet,
@@ -90,7 +70,7 @@ static void v1_spindleGetMaxRPM (void)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM50,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_ReadCoils,
         .adu[2] = 0x03,
         .adu[3] = 0x90, // PD144
@@ -100,6 +80,7 @@ static void v1_spindleGetMaxRPM (void)
         .rx_length = 8
     };
 
+    modbus_set_silence(&v1_silence);
     modbus_send(&cmd, &v1_callbacks, true);
 }
 
@@ -112,7 +93,7 @@ static void v1_spindleSetRPM (float rpm, bool block)
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
             .crc_check = false,
-            .adu[0] = VFD_ADDRESS,
+            .adu[0] = vfd_config.modbus_address,
             .adu[1] = ModBus_WriteCoil,
             .adu[2] = 0x02,
             .adu[3] = data >> 8,
@@ -144,7 +125,7 @@ static void v1_spindleSetState (spindle_state_t state, float rpm)
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x01,
         .adu[3] = (!state.on || rpm == 0.0f) ? 0x08 : (state.ccw ? 0x11 : 0x01),
@@ -173,7 +154,7 @@ static spindle_state_t v1_spindleGetState (void)
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_ReadInputRegisters,
         .adu[2] = 0x03,
         .adu[3] = 0x01,
@@ -232,9 +213,9 @@ bool v1_spindle_config (void)
     return true;
 }
 
-#endif // VFD_ENABLE == 1 || VFD_ENABLE == -1
+#endif // VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
 
-#if VFD_ENABLE == 2 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
 
 static void v2_rx_packet (modbus_message_t *msg);
 
@@ -249,7 +230,7 @@ static void v2_spindleGetMaxRPM (void)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0xB0,
         .adu[3] = 0x05,
@@ -259,6 +240,7 @@ static void v2_spindleGetMaxRPM (void)
         .rx_length = 8
     };
 
+    modbus_set_silence(NULL);
     modbus_send(&cmd, &v2_callbacks, true);
 }
 
@@ -271,7 +253,7 @@ static void v2_spindleSetRPM (float rpm, bool block)
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
             .crc_check = false,
-            .adu[0] = VFD_ADDRESS,
+            .adu[0] = vfd_config.modbus_address,
             .adu[1] = ModBus_WriteRegister,
             .adu[2] = 0x10,
             .adu[4] = data >> 8,
@@ -303,7 +285,7 @@ static void v2_spindleSetState (spindle_state_t state, float rpm)
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x20,
         .adu[5] = (!state.on || rpm == 0.0f) ? 6 : (state.ccw ? 2 : 1),
@@ -327,7 +309,7 @@ static spindle_state_t v2_spindleGetState (void)
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
-        .adu[0] = VFD_ADDRESS,
+        .adu[0] = vfd_config.modbus_address,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x70,
         .adu[3] = 0x0C,
@@ -385,7 +367,7 @@ bool v2_spindle_config (void)
     return true;
 }
 
-#endif // VFD_ENABLE == 2 || VFD_ENABLE == -1
+#endif // VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
@@ -412,12 +394,12 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt) {
-#if VFD_ENABLE == 1
+#if VFD_ENABLE == SPINDLE_ALL
         hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
-#elif VFD_ENABLE == 2
-        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.07]" ASCII_EOL);
-#else
+#elif VFD_ENABLE == SPINDLE_HUANYANG1
         hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.07]" ASCII_EOL);
+#else
+        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.07]" ASCII_EOL);
 #endif
     }
 }
@@ -426,11 +408,11 @@ static void huanyang_reset (void)
 {
     driver_reset();
 
-#if VFD_ENABLE == 1 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
     if(v1_active)
         v1_spindleGetMaxRPM();
 #endif
-#if VFD_ENABLE == 2 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
     if(v2_active)
         v2_spindleGetMaxRPM();
 #endif
@@ -454,7 +436,7 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
 
 void vfd_huanyang_init (void)
 {
-#if VFD_ENABLE == 1 || VFD_ENABLE == -1
+#if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
     static const spindle_ptrs_t v1_spindle = {
         .cap.variable = On,
         .cap.at_speed = On,
@@ -464,8 +446,11 @@ void vfd_huanyang_init (void)
         .get_state = v1_spindleGetState,
         .update_rpm = v1_spindleUpdateRPM
     };
+
+    v1_spindle_id = vfd_register(&v1_spindle, "Huanyang v1");
 #endif
-#if VFD_ENABLE == 2 || VFD_ENABLE == -1
+
+#if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
     static const spindle_ptrs_t v2_spindle = {
         .cap.variable = On,
         .cap.at_speed = On,
@@ -475,27 +460,20 @@ void vfd_huanyang_init (void)
         .get_state = v2_spindleGetState,
         .update_rpm = v2_spindleUpdateRPM
     };
+
+    v2_spindle_id = vfd_register(&v2_spindle, "Huanyang P2A");
 #endif
 
-    if(modbus_enabled()) {
+    if(v1_spindle_id != -1 || v2_spindle_id != -1) {
 
-#if VFD_ENABLE == 1 || VFD_ENABLE == -1
-        v1_spindle_id = spindle_register(&v1_spindle, "Huanyang v1");
-#endif
-#if VFD_ENABLE == 2 || VFD_ENABLE == -1
-        v2_spindle_id = spindle_register(&v2_spindle, "Huanyang P2A");
-#endif
-        if(v1_spindle_id != -1 || v2_spindle_id != -1) {
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = huanyang_spindle_select;
 
-            on_spindle_select = grbl.on_spindle_select;
-            grbl.on_spindle_select = huanyang_spindle_select;
+        on_report_options = grbl.on_report_options;
+        grbl.on_report_options = onReportOptions;
 
-            on_report_options = grbl.on_report_options;
-            grbl.on_report_options = onReportOptions;
-
-            driver_reset = hal.driver_reset;
-            hal.driver_reset = huanyang_reset;
-        }
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = huanyang_reset;
     }
 }
 

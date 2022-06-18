@@ -64,18 +64,21 @@ typedef struct queue_entry {
     struct queue_entry *next;
 } queue_entry_t;
 
-static const uint32_t baud[]    = { 2400, 4800, 9600, 19200, 38400, 115200 };
-
-// Testing Huanyang VFDs (with other devices on the bus) has shown failure to respond if silent period is < 6ms
-#if VFD_ENABLE == 1
-static const uint16_t silence[] = {   16,    8,    6,     6,     6,      6 };
-#else
-static const uint16_t silence[] = {   16,    8,    4,     2,     2,      2 };
-#endif
+static const uint32_t baud[] = { 2400, 4800, 9600, 19200, 38400, 115200 };
+static const modbus_silence_timeout_t dflt_timeout =
+{
+    .b2400   = 16,
+    .b4800   = 8,
+    .b9600   = 4,
+    .b19200  = 2,
+    .b38400  = 2,
+    .b115200 = 2
+};
 
 static modbus_stream_t stream;
 static uint32_t rx_timeout = 0, silence_until = 0, silence_timeout;
 static int16_t exception_code = 0;
+static modbus_silence_timeout_t silence;
 static queue_entry_t queue[MODBUS_QUEUE_LENGTH];
 static modbus_settings_t modbus;
 static volatile bool spin_lock = false, is_up = false;
@@ -142,7 +145,7 @@ static void modbus_poll (void)
 
     uint32_t ms = hal.get_elapsed_ticks();
 
-    if(ms == last_ms) // check once every ms
+    if(ms == last_ms || spin_lock) // check once every ms
         return;
 
     spin_lock = true;
@@ -278,14 +281,9 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
         bool poll = true;
 
-        grbl.on_execute_realtime(state_get());
-
-        while(state != ModBus_Idle) {
-
+        do {
             grbl.on_execute_realtime(state_get());
-            if(sys.abort)
-                return false;
-        }
+        } while(state != ModBus_Idle);
 
         if(stream.set_direction)
             stream.set_direction(true);
@@ -305,10 +303,7 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
             grbl.on_execute_realtime(state_get());
 
-            if(sys.abort)
-                poll = false;
-
-            else switch(state) {
+            switch(state) {
 
                 case ModBus_Timeout:
                     if(packet->callbacks.on_rx_exception)
@@ -349,6 +344,8 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
 modbus_state_t modbus_get_state (void)
 {
+    modbus_poll();
+
     return state;
 }
 
@@ -367,7 +364,9 @@ static void modbus_reset (void)
         stream.flush_tx_buffer();
         stream.flush_rx_buffer();
 
-    } else while(state != ModBus_Idle)
+    }
+
+    while(state != ModBus_Idle)
         modbus_poll();
 
     driver_reset();
@@ -412,7 +411,7 @@ static setting_details_t setting_details = {
 static status_code_t modbus_set_baud (setting_id_t id, uint_fast16_t value)
 {
     modbus.baud_rate = baud[(uint32_t)value];
-    silence_timeout = silence[(uint32_t)value];
+    silence_timeout = silence.timeout[(uint32_t)value];
     stream.set_baud_rate(modbus.baud_rate);
 
     return Status_OK;
@@ -437,7 +436,7 @@ static void modbus_settings_load (void)
         modbus_settings_restore();
 
     is_up = true;
-    silence_timeout = silence[get_baudrate(modbus.baud_rate)];
+    silence_timeout = silence.timeout[get_baudrate(modbus.baud_rate)];
 
     stream.set_baud_rate(modbus.baud_rate);
 }
@@ -447,7 +446,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.13]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.14]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
@@ -458,6 +457,16 @@ bool modbus_isup (void)
 bool modbus_enabled (void)
 {
     return nvs_address != 0;
+}
+
+void modbus_set_silence (const modbus_silence_timeout_t *timeout)
+{
+    if(timeout)
+        memcpy(&silence, timeout, sizeof(modbus_silence_timeout_t));
+    else
+        memcpy(&silence, &dflt_timeout, sizeof(modbus_silence_timeout_t));
+
+    silence_timeout = silence.timeout[get_baudrate(modbus.baud_rate)];
 }
 
 static bool stream_is_valid (const io_stream_t *stream)
@@ -554,6 +563,8 @@ void modbus_init (void)
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
+        //TODO: subscribe to grbl.on_reset event to terminate polling?
+
         settings_register(&setting_details);
 
         head = tail = &queue[0];
@@ -561,6 +572,8 @@ void modbus_init (void)
         uint_fast8_t idx;
         for(idx = 0; idx < MODBUS_QUEUE_LENGTH; idx++)
             queue[idx].next = idx == MODBUS_QUEUE_LENGTH - 1 ? &queue[0] : &queue[idx + 1];
+
+        modbus_set_silence(NULL);
 
     } else {
         protocol_enqueue_rt_command(pos_failed);
