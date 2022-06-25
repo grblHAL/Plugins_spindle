@@ -12,7 +12,7 @@ Note that the setting value not the same as the VFD spindle number used in _my_m
 Switching between the configured VFD spindle and PWM output is possible via a M-code, currently `M104`: `M104P0` for PWM (laser) and `M104P1` for VFD.  
 Available when `\\#define DUAL_SPINDLE` is uncommented in _my_machine.h_ for drivers that has support.
 
-If all spindles are enabled `M104Q<n>` can be used to switch between them withouh changing the configuration. `<n>` is a spindle number as listed by the `$$=395` command.  
+If all spindles are enabled `M104Q<n>` can be used to switch between them without changing the configuration. `<n>` is a spindle number as listed by the `$$=395` command.  
 
 The MODVFD spindle uses different register values for the control and RPM functions. The functionality is similar to the [VFDMOD](https://github.com/aekhv/vfdmod) component from LinuxCNC.
 

@@ -51,6 +51,7 @@ typedef enum {
     VFD_Idle = 0,
     VFD_GetRPM,
     VFD_SetRPM,
+    VFD_GetMinRPM,
     VFD_GetMaxRPM,
     VFD_GetMaxRPM50,
     VFD_GetStatus,

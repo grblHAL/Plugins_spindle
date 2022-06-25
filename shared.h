@@ -35,5 +35,6 @@
 #define SPINDLE_GS20        3 // To be added
 #define SPINDLE_YL620A      4 // To be added
 #define SPINDLE_MODVFD      5
+#define SPINDLE_H100        6 // Not tested
 
 /**/
