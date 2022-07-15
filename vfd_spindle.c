@@ -86,34 +86,34 @@ static const setting_group_detail_t vfd_groups [] = {
 };
 
 static const setting_detail_t vfd_settings[] = {
-     { Setting_VFD_TYPE, Group_UserSettings, "VFD Model", NULL, Format_RadioButtons, "Huanyang 1,Huanyang P2A,Durapulse GS20,Yalang YL620A, MODVFD Custom", NULL, NULL, Setting_NonCore, &vfd_config.vfd_type, NULL, NULL },  
-     { Setting_VFD_RPM_HZ, Group_UserSettings, "RPM per Hz", "", Format_Integer, "####0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, NULL },
-     { Setting_VFD_PLUGIN_10, Group_UserSettings, "Run/Stop Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.runstop_reg, NULL, NULL },  
-     { Setting_VFD_PLUGIN_11, Group_UserSettings, "Set Frequency Register (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.set_freq_reg, NULL, NULL },    
-     { Setting_VFD_PLUGIN_12, Group_UserSettings, "Get Frequency Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.get_freq_reg, NULL, NULL },  
-     { Setting_VFD_PLUGIN_13, Group_UserSettings, "Run CW Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_cw_cmd, NULL, NULL },   
-     { Setting_VFD_PLUGIN_14, Group_UserSettings, "Run CCW Command (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_ccw_cmd, NULL, NULL },  
-     { Setting_VFD_PLUGIN_15, Group_UserSettings, "Stop Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.stop_cmd, NULL, NULL },  
-     { Setting_VFD_PLUGIN_16, Group_UserSettings, "RPM input Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_multiplier, NULL, NULL }, 
-     { Setting_VFD_PLUGIN_17, Group_UserSettings, "RPM input Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_divider, NULL, NULL },  
-     { Setting_VFD_PLUGIN_18, Group_UserSettings, "RPM output Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_multiplier, NULL, NULL }, 
-     { Setting_VFD_PLUGIN_19, Group_UserSettings, "RPM output Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_divider, NULL, NULL },       
+     { Setting_VFD_21, Group_UserSettings, "VFD Model", NULL, Format_RadioButtons, "Huanyang 1,Huanyang P2A,Durapulse GS20,Yalang YL620A, MODVFD Custom", NULL, NULL, Setting_NonCore, &vfd_config.vfd_type, NULL, NULL },  
+     { Setting_VFD_RPM_Hz, Group_UserSettings, "RPM per Hz", "", Format_Integer, "####0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, NULL },
+     { Setting_VFD_10, Group_UserSettings, "Run/Stop Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.runstop_reg, NULL, NULL },  
+     { Setting_VFD_11, Group_UserSettings, "Set Frequency Register (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.set_freq_reg, NULL, NULL },    
+     { Setting_VFD_12, Group_UserSettings, "Get Frequency Register (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.get_freq_reg, NULL, NULL },  
+     { Setting_VFD_13, Group_UserSettings, "Run CW Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_cw_cmd, NULL, NULL },   
+     { Setting_VFD_14, Group_UserSettings, "Run CCW Command (decimal)", NULL, Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.run_ccw_cmd, NULL, NULL },  
+     { Setting_VFD_15, Group_UserSettings, "Stop Command (decimal)", "", Format_Integer, "########0", NULL, NULL, Setting_NonCore, &vfd_config.stop_cmd, NULL, NULL },  
+     { Setting_VFD_16, Group_UserSettings, "RPM input Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_multiplier, NULL, NULL }, 
+     { Setting_VFD_17, Group_UserSettings, "RPM input Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.in_divider, NULL, NULL },  
+     { Setting_VFD_18, Group_UserSettings, "RPM output Multiplier", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_multiplier, NULL, NULL }, 
+     { Setting_VFD_19, Group_UserSettings, "RPM output Divider", "", Format_Decimal, "########0", NULL, NULL, Setting_NonCore, &vfd_config.out_divider, NULL, NULL },       
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t vfd_settings_descr[] = {
-    { Setting_VFD_TYPE, "Choose from supported VFDs or use custom MODVFD" },
-    { Setting_VFD_RPM_HZ, "RPM/Hz value for GS20 and YL620A" },
-    { Setting_VFD_PLUGIN_10, "MODVFD Register for Run/stop" },
-    { Setting_VFD_PLUGIN_11, "MODVFD Set Frequency Register" },
-    { Setting_VFD_PLUGIN_12, "MODVFD Get Frequency Register" },
-    { Setting_VFD_PLUGIN_13, "MODVFD Command word for CW" },
-    { Setting_VFD_PLUGIN_14, "MODVFD Command word for CCW" },
-    { Setting_VFD_PLUGIN_15, "MODVFD Command word for stop" },   
-    { Setting_VFD_PLUGIN_16, "MODVFD RPM value multiplier for programming RPM" },
-    { Setting_VFD_PLUGIN_17, "MODVFD RPM value divider for programming RPM" },
-    { Setting_VFD_PLUGIN_18, "MODVFD RPM value multiplier for reading RPM" },
-    { Setting_VFD_PLUGIN_19, "MODVFD RPM value divider for reading RPM" },               
+    { Setting_VFD_21, "Choose from supported VFDs or use custom MODVFD" },
+    { Setting_VFD_RPM_Hz, "RPM/Hz value for GS20 and YL620A" },
+    { Setting_VFD_10, "MODVFD Register for Run/stop" },
+    { Setting_VFD_11, "MODVFD Set Frequency Register" },
+    { Setting_VFD_12, "MODVFD Get Frequency Register" },
+    { Setting_VFD_13, "MODVFD Command word for CW" },
+    { Setting_VFD_14, "MODVFD Command word for CCW" },
+    { Setting_VFD_15, "MODVFD Command word for stop" },   
+    { Setting_VFD_16, "MODVFD RPM value multiplier for programming RPM" },
+    { Setting_VFD_17, "MODVFD RPM value divider for programming RPM" },
+    { Setting_VFD_18, "MODVFD RPM value multiplier for reading RPM" },
+    { Setting_VFD_19, "MODVFD RPM value divider for reading RPM" },               
 };
 #endif
 
