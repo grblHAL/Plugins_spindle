@@ -77,6 +77,7 @@ static modbus_stream_t stream;
 static uint32_t rx_timeout = 0, silence_until = 0, silence_timeout;
 static int16_t exception_code = 0;
 static queue_entry_t queue[MODBUS_QUEUE_LENGTH];
+modbus_settings_t modbus;
 static volatile bool spin_lock = false, is_up = false;
 static volatile queue_entry_t *tail, *head, *packet = NULL;
 static volatile modbus_state_t state = ModBus_Idle;
@@ -277,9 +278,12 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
         bool poll = true;
 
+        grbl.on_execute_realtime(state_get());
+
         while(state != ModBus_Idle) {
+
             grbl.on_execute_realtime(state_get());
-            if(ABORTED)
+            if(sys.abort)
                 return false;
         }
 
@@ -301,7 +305,7 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
 
             grbl.on_execute_realtime(state_get());
 
-            if(ABORTED)
+            if(sys.abort)
                 poll = false;
 
             else switch(state) {
@@ -352,14 +356,19 @@ void modbus_reset (void)
 {
     while(spin_lock);
 
-    packet = NULL;
-    tail = head;
+    if(sys.abort) {
 
-    silence_until = 0;
-    state = ModBus_Idle;
+        packet = NULL;
+        tail = head;
 
-    stream.flush_tx_buffer();
-    stream.flush_rx_buffer();
+        silence_until = 0;
+        state = ModBus_Idle;
+
+        stream.flush_tx_buffer();
+        stream.flush_rx_buffer();
+
+    } else while(state != ModBus_Idle)
+        modbus_poll();
 
     driver_reset();
 }
@@ -382,7 +391,7 @@ static const setting_group_detail_t modbus_groups [] = {
 
 static const setting_detail_t modbus_settings[] = {
     { Settings_ModBus_BaudRate, Group_ModBus, "ModBus baud rate", NULL, Format_RadioButtons, "2400,4800,9600,19200,38400,115200", NULL, NULL, Setting_NonCoreFn, modbus_set_baud, modbus_get_baud, NULL },
-    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL },   
+    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL }
 };
 
 static void modbus_settings_save (void)
@@ -438,7 +447,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.12]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.13]" ASCII_EOL);
 }
 
 bool modbus_isup (void)
