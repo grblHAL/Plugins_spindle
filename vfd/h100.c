@@ -192,7 +192,7 @@ static void rx_packet (modbus_message_t *msg)
     }
 }
 
-static void raise_alarm (uint_fast16_t state)
+static void raise_alarm (sys_state_t state)
 {
     system_raise_alarm(Alarm_Spindle);
 }

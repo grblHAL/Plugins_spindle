@@ -374,7 +374,7 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
     return &spindle_data;
 }
 
-static void raise_alarm (uint_fast16_t state)
+static void raise_alarm (sys_state_t state)
 {
     system_raise_alarm(Alarm_Spindle);
 }
