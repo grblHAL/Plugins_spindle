@@ -428,8 +428,8 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
     } else if(hal.spindle.get_data == spindleGetData)
         hal.spindle.get_data = NULL;
 
-    if(on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    if(on_spindle_select)
+        on_spindle_select(spindle_id);
 
     return true;
 }
@@ -437,28 +437,28 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
 void vfd_huanyang_init (void)
 {
 #if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
-    static const spindle_ptrs_t v1_spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = v1_spindle_config,
-        .set_state = v1_spindleSetState,
-        .get_state = v1_spindleGetState,
-        .update_rpm = v1_spindleUpdateRPM
+    static const vfd_spindle_ptrs_t v1_spindle = {
+        .spindle.cap.variable = On,
+        .spindle.cap.at_speed = On,
+        .spindle.cap.direction = On,
+        .spindle.config = v1_spindle_config,
+        .spindle.set_state = v1_spindleSetState,
+        .spindle.get_state = v1_spindleGetState,
+        .spindle.update_rpm = v1_spindleUpdateRPM
     };
 
     v1_spindle_id = vfd_register(&v1_spindle, "Huanyang v1");
 #endif
 
 #if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
-    static const spindle_ptrs_t v2_spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = v2_spindle_config,
-        .set_state = v2_spindleSetState,
-        .get_state = v2_spindleGetState,
-        .update_rpm = v2_spindleUpdateRPM
+    static const vfd_spindle_ptrs_t v2_spindle = {
+        .spindle.cap.variable = On,
+        .spindle.cap.at_speed = On,
+        .spindle.cap.direction = On,
+        .spindle.config = v2_spindle_config,
+        .spindle.set_state = v2_spindleSetState,
+        .spindle.get_state = v2_spindleGetState,
+        .spindle.update_rpm = v2_spindleUpdateRPM
     };
 
     v2_spindle_id = vfd_register(&v2_spindle, "Huanyang P2A");

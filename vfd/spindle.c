@@ -43,26 +43,50 @@
 
 typedef struct {
     spindle_id_t id;
-    const spindle_ptrs_t *spindle;
+    const vfd_spindle_ptrs_t *vfd;
 } vfd_spindle_t;
 
 static uint8_t n_spindle = 0;
+static bool spindle_changed = false;
+static vfd_ptrs_t vfd_spindle = {0};
 static vfd_spindle_t vfd_spindles[N_SPINDLE];
 static nvs_address_t nvs_address = 0;
 
 static on_spindle_select_ptr on_spindle_select;
-static on_report_options_ptr on_report_options;
+static on_realtime_report_ptr on_realtime_report = NULL;
 
 vfd_settings_t vfd_config;
 
-spindle_id_t vfd_register (const spindle_ptrs_t *spindle, const char *name)
+static void vfd_realtime_report (stream_write_ptr stream_write, report_tracking_flags_t report)
+{
+    static float load = -1.0f;
+
+    if(on_realtime_report)
+        on_realtime_report(stream_write, report);
+
+    if(vfd_spindle.get_load) {
+        float new_load = vfd_spindle.get_load();
+        if(load != new_load || spindle_changed || report.all) {
+            load = new_load;
+            spindle_changed = false;
+            stream_write("|Sl:");
+            stream_write(ftoa(load, 1));
+        }
+    }
+}
+
+spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name)
 {
     spindle_id_t spindle_id = -1;
 
-    if(n_spindle < N_SPINDLE && (spindle_id = spindle_register(spindle, name)) != -1) {
+    if(n_spindle < N_SPINDLE && (spindle_id = spindle_register(&vfd->spindle, name)) != -1) {
         vfd_spindles[n_spindle].id = spindle_id;
-        vfd_spindles[n_spindle++].spindle = spindle;
-        return n_spindle - 1;
+        vfd_spindles[n_spindle++].vfd = vfd;
+
+        if(vfd->vfd.get_load && on_realtime_report == NULL) {
+            on_realtime_report = grbl.on_realtime_report;
+            grbl.on_realtime_report = vfd_realtime_report;
+        }
     }
 
     return spindle_id;
@@ -161,37 +185,31 @@ static setting_details_t vfd_setting_details = {
     .save = vfd_settings_save
 };
 
-/*
-static void vfd_onReportOptions (bool newopt)
-{
-    on_report_options(newopt);
-
-    if(!newopt) {
-        hal.stream.write("[PLUGIN:VFD SELECTOR v0.02]" ASCII_EOL);
-    }
-}
-
 static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
-    bool select_ok = false;
+    uint_fast8_t idx = n_spindle;
 
+    spindle_changed = true;
+    memset(&vfd_spindle, 0, sizeof(vfd_ptrs_t));;
+    if(n_spindle) do {
+        if(vfd_spindles[--idx].id == spindle_id) {
+            memcpy(&vfd_spindle, &vfd_spindles[idx].vfd->vfd, sizeof(vfd_ptrs_t));
+            break;
+        }
+    } while(idx);
 
-    if(select_ok && on_spindle_select && on_spindle_select(spindle_id))
-        return true;
+    if(on_spindle_select)
+        on_spindle_select(spindle_id);
 
-    return select_ok;
+    return true;
 }
-*/
 
 void vfd_init (void)
 {
     if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
 
         on_spindle_select = grbl.on_spindle_select;
-//        grbl.on_spindle_select = vfd_spindle_select;
-
-        on_report_options = grbl.on_report_options;
-//        grbl.on_report_options = vfd_onReportOptions;
+        grbl.on_spindle_select = vfd_spindle_select;
 
         settings_register(&vfd_setting_details);
 
@@ -200,9 +218,24 @@ void vfd_init (void)
         vfd_huanyang_init();
 #endif
 
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20
+        extern void vfd_gs20_init (void);
+        vfd_gs20_init();
+#endif
+
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_YL620A
+        extern void vfd_yl620_init (void);
+        vfd_yl620_init();
+#endif
+
 #if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
         extern void vfd_modvfd_init (void);
         vfd_modvfd_init();
+#endif
+
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_H100
+        extern void vfd_h100_init (void);
+        vfd_h100_init();
 #endif
     }
 }

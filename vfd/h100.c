@@ -254,14 +254,14 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
 
 void vfd_h100_init (void)
 {
-    static const spindle_ptrs_t spindle = {
-        .cap.variable = On,
-        .cap.at_speed = On,
-        .cap.direction = On,
-        .config = vfd_spindle_config,
-        .set_state = spindleSetState,
-        .get_state = spindleGetState,
-        .update_rpm = spindleUpdateRPM
+    static const vfd_spindle_ptrs_t spindle = {
+        .spindle.cap.variable = On,
+        .spindle.cap.at_speed = On,
+        .spindle.cap.direction = On,
+        .spindle.config = vfd_spindle_config,
+        .spindle.set_state = spindleSetState,
+        .spindle.get_state = spindleGetState,
+        .spindle.update_rpm = spindleUpdateRPM
     };
 
     if((vfd_spindle_id = vfd_register(&spindle, "H-100")) != -1) {

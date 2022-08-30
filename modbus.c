@@ -244,6 +244,11 @@ static void modbus_poll (void)
             }
             break;
 
+        case ModBus_Timeout:
+            state = ModBus_Silent;
+            silence_until = ms + silence_timeout;
+            break;
+
         default:
             break;
     }

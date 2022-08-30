@@ -32,8 +32,8 @@
 #define SPINDLE_ALL        -1
 #define SPINDLE_HUANYANG1   1
 #define SPINDLE_HUANYANG2   2
-#define SPINDLE_GS20        3 // To be added
-#define SPINDLE_YL620A      4 // To be added
+#define SPINDLE_GS20        3
+#define SPINDLE_YL620A      4
 #define SPINDLE_MODVFD      5
 #define SPINDLE_H100        6 // Not tested
 

@@ -73,8 +73,19 @@ typedef struct {
     float out_divider;
 } vfd_settings_t;
 
+typedef float (*vfd_get_load_ptr)(void);
+
+typedef struct {
+    vfd_get_load_ptr get_load;
+} vfd_ptrs_t;
+
+typedef struct {
+    const spindle_ptrs_t spindle;
+    const vfd_ptrs_t vfd;
+} vfd_spindle_ptrs_t;
+
 extern vfd_settings_t vfd_config;
 
-spindle_id_t vfd_register (const spindle_ptrs_t *spindle, const char *name);
+spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name);
 
 #endif
