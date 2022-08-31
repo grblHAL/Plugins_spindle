@@ -39,6 +39,8 @@ static on_report_options_ptr on_report_options;
 static on_spindle_select_ptr on_spindle_select;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
+static float amps_max = 0;
+static float amps = 0;
 
 static void rx_exception (uint8_t code, void *context);
 static spindle_data_t *spindleGetData (spindle_data_request_t request);
@@ -74,6 +76,25 @@ static void v1_spindleGetMaxRPM (void)
         .adu[1] = ModBus_ReadCoils,
         .adu[2] = 0x03,
         .adu[3] = 0x90, // PD144
+        .adu[4] = 0x00,
+        .adu[5] = 0x00,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+
+    modbus_set_silence(&v1_silence);
+    modbus_send(&cmd, &v1_callbacks, true);
+}
+
+// Read maximum configured current from spindle, value is used later for calculating spindle load
+static void v1_spindleGetMaxAmps (void)
+{
+    modbus_message_t cmd = {
+        .context = (void *)VFD_GetMaxAmps,
+        .adu[0] = vfd_config.modbus_address,
+        .adu[1] = ModBus_ReadCoils,
+        .adu[2] = 0x03,
+        .adu[3] = 0x8E, // PD142
         .adu[4] = 0x00,
         .adu[5] = 0x00,
         .tx_length = 8,
@@ -151,7 +172,7 @@ static spindle_data_t *v1_spindleGetData (spindle_data_request_t request)
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t v1_spindleGetState (void)
 {
-    modbus_message_t mode_cmd = {
+    modbus_message_t rpm_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
         .adu[0] = vfd_config.modbus_address,
@@ -162,7 +183,19 @@ static spindle_state_t v1_spindleGetState (void)
         .rx_length = 8
     };
 
-    modbus_send(&mode_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
+    modbus_send(&rpm_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
+
+    modbus_message_t amps_cmd = {
+        .context = (void *)VFD_GetAmps,
+        .crc_check = false,
+        .adu[0] = VFD_ADDRESS,
+        .adu[1] = ModBus_ReadInputRegisters,
+        .adu[2] = 0x03,
+        .adu[3] = 0x02,     // Output amps * 10
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    modbus_send(&amps_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
 
     // Get the actual RPM from spindle encoder input when available.
     if(hal.spindle.get_data && hal.spindle.get_data != v1_spindleGetData) {
@@ -192,6 +225,14 @@ static void v1_rx_packet (modbus_message_t *msg)
                 rpm_max50 = (msg->adu[4] << 8) | msg->adu[5];
                 break;
 
+            case VFD_GetMaxAmps:
+                amps_max = (float)((msg->adu[4] << 8) | msg->adu[5]) / 10.0f;
+                break;
+
+            case VFD_GetAmps:
+                amps = (float)((msg->adu[4] << 8) | msg->adu[5]) / 10.0f;
+                break;
+
             default:
                 break;
         }
@@ -208,6 +249,7 @@ bool v1_spindle_config (void)
     if(!init_ok) {
         init_ok = true;
         v1_spindleGetMaxRPM();
+        v1_spindleGetMaxAmps();
     }
 
     return true;
@@ -338,7 +380,6 @@ static void v2_rx_packet (modbus_message_t *msg)
 
             case VFD_GetRPM:
                 spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]);
-                spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * (float)rpm_max50 / 5000.0f;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 break;
 
@@ -369,6 +410,14 @@ bool v2_spindle_config (void)
 
 #endif // VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
 
+static float spindleGetLoad (void)
+{
+    if (amps_max)
+        return ((amps/amps_max) * 100.0f);
+
+    return 0;
+}
+
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
     return &spindle_data;
@@ -395,11 +444,11 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if VFD_ENABLE == SPINDLE_ALL
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.08]" ASCII_EOL);
 #elif VFD_ENABLE == SPINDLE_HUANYANG1
-        hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.08]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.07]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.08]" ASCII_EOL);
 #endif
     }
 }
@@ -409,8 +458,10 @@ static void huanyang_reset (void)
     driver_reset();
 
 #if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
-    if(v1_active)
+    if(v1_active) {
         v1_spindleGetMaxRPM();
+        v1_spindleGetMaxAmps();
+    }
 #endif
 #if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
     if(v2_active)
@@ -444,7 +495,8 @@ void vfd_huanyang_init (void)
         .spindle.config = v1_spindle_config,
         .spindle.set_state = v1_spindleSetState,
         .spindle.get_state = v1_spindleGetState,
-        .spindle.update_rpm = v1_spindleUpdateRPM
+        .spindle.update_rpm = v1_spindleUpdateRPM,
+        .vfd.get_load = spindleGetLoad
     };
 
     v1_spindle_id = vfd_register(&v1_spindle, "Huanyang v1");

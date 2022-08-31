@@ -55,7 +55,9 @@ typedef enum {
     VFD_GetMaxRPM,
     VFD_GetMaxRPM50,
     VFD_GetStatus,
-    VFD_SetStatus
+    VFD_SetStatus,
+    VFD_GetMaxAmps,
+    VFD_GetAmps
 } vfd_response_t;
 
 typedef struct {
