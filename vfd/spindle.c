@@ -204,6 +204,11 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
     return true;
 }
 
+const vfd_ptrs_t *vfd_get_active (void)
+{
+    return &vfd_spindle;
+}
+
 void vfd_init (void)
 {
     if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
