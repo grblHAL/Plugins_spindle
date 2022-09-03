@@ -55,7 +55,9 @@ typedef enum {
     VFD_GetMaxRPM,
     VFD_GetMaxRPM50,
     VFD_GetStatus,
-    VFD_SetStatus
+    VFD_SetStatus,
+    VFD_GetMaxAmps,
+    VFD_GetAmps
 } vfd_response_t;
 
 typedef struct {
@@ -87,5 +89,6 @@ typedef struct {
 extern vfd_settings_t vfd_config;
 
 spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name);
+const vfd_ptrs_t *vfd_get_active (void);
 
 #endif
