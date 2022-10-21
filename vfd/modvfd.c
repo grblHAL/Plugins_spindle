@@ -271,6 +271,7 @@ bool modvfd_spindle_select (spindle_id_t spindle_id)
 void vfd_modvfd_init (void)
 {
     static const vfd_spindle_ptrs_t spindle = {
+        .spindle.type = SpindleType_VFD,
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,

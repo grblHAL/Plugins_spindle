@@ -489,6 +489,7 @@ void vfd_huanyang_init (void)
 {
 #if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
     static const vfd_spindle_ptrs_t v1_spindle = {
+        .spindle.type = SpindleType_VFD,
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,
@@ -504,6 +505,7 @@ void vfd_huanyang_init (void)
 
 #if VFD_ENABLE == SPINDLE_HUANYANG2 || VFD_ENABLE == SPINDLE_ALL
     static const vfd_spindle_ptrs_t v2_spindle = {
+        .spindle.type = SpindleType_VFD,
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,

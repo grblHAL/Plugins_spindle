@@ -30,6 +30,7 @@
 
 #include "spindle.h"
 
+static bool spindle_active = false;
 static spindle_id_t vfd_spindle_id = -1;
 static uint32_t freq_min = 0, freq_max = 0;
 static float rpm_programmed = -1.0f, rpm_low_limit = 0.0f, rpm_high_limit = 0.0f;
@@ -218,7 +219,9 @@ static void onReportOptions (bool newopt)
 static void spindle_reset (void)
 {
     driver_reset();
-    spindleGetRPMLimits();
+
+    if(spindle_active)
+        spindleGetRPMLimits();
 }
 
 bool vfd_spindle_config (void)
@@ -238,7 +241,7 @@ bool vfd_spindle_config (void)
 
 static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
-    if(spindle_id == vfd_spindle_id) {
+    if((spindle_active = spindle_id == vfd_spindle_id)) {
 
         if(settings.spindle.ppr == 0)
             hal.spindle.get_data = spindleGetData;
@@ -255,6 +258,7 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
 void vfd_h100_init (void)
 {
     static const vfd_spindle_ptrs_t spindle = {
+        .spindle.type = SpindleType_VFD,
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,

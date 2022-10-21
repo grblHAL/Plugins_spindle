@@ -47,8 +47,9 @@
 
 #include "modbus.h"
 
-#define DEFAULT_BAUDRATE 3 // 19200
-
+#ifndef MODBUS_BAUDRATE
+#define MODBUS_BAUDRATE 3 // 19200
+#endif
 #ifndef MODBUS_SERIAL_PORT
 #define MODBUS_SERIAL_PORT -1
 #endif
@@ -386,7 +387,7 @@ static uint32_t get_baudrate (uint32_t rate)
             return idx;
     } while(idx);
 
-    return DEFAULT_BAUDRATE;
+    return MODBUS_BAUDRATE;
 }
 
 static const setting_group_detail_t modbus_groups [] = {
@@ -430,7 +431,7 @@ static uint32_t modbus_get_baud (setting_id_t setting)
 static void modbus_settings_restore (void)
 {
     modbus.rx_timeout = 50;
-    modbus.baud_rate = baud[DEFAULT_BAUDRATE];
+    modbus.baud_rate = baud[MODBUS_BAUDRATE];
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&modbus, sizeof(modbus_settings_t), true);
 }
@@ -508,7 +509,7 @@ static bool claim_stream (io_stream_properties_t const *sstream)
 #else
     if(sstream->type == StreamType_Serial && sstream->flags.modbus_ready && !sstream->flags.claimed) {
 #endif
-        if((claimed = sstream->claim(baud[DEFAULT_BAUDRATE])) && stream_is_valid(claimed)) {
+        if((claimed = sstream->claim(baud[MODBUS_BAUDRATE])) && stream_is_valid(claimed)) {
 
             claimed->set_enqueue_rt_handler(stream_buffer_all);
 
