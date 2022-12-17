@@ -58,7 +58,7 @@ bool gs20_spindle_config (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-    uint16_t data = ((uint32_t)(rpm) * 50) / vfd_config.vfd_rpm_hz;
+    uint16_t data = ((uint32_t)(rpm) * 100) / vfd_config.vfd_rpm_hz;
 
     modbus_message_t rpm_cmd = {
         .context = (void *)VFD_SetRPM,
