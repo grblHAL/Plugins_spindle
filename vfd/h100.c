@@ -97,8 +97,8 @@ static void spindleSetRPM (float rpm, bool block)
         modbus_send(&rpm_cmd, &callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-        spindle_data.rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100 ));
-        spindle_data.rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100 ));
+          rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100 ));
+          rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100 ));
         }
         rpm_programmed = rpm;
     }
