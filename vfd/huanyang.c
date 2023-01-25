@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2022 Terje Io
+  Copyright (c) 2020-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -32,18 +32,17 @@
 
 static spindle_id_t v1_spindle_id = -1, v2_spindle_id = -1;
 static bool v1_active = false,  v2_active = false;
-static float rpm_programmed = -1.0f;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
 static on_report_options_ptr on_report_options;
 static on_spindle_select_ptr on_spindle_select;
+static spindle_get_data_ptr on_get_data = NULL;
 static driver_reset_ptr driver_reset;
 static uint32_t rpm_max = 0;
 static float amps_max = 0;
 static float amps = 0;
 
 static void rx_exception (uint8_t code, void *context);
-static spindle_data_t *spindleGetData (spindle_data_request_t request);
 
 #if VFD_ENABLE == SPINDLE_HUANYANG1 || VFD_ENABLE == SPINDLE_ALL
 
@@ -107,7 +106,7 @@ static void v1_spindleGetMaxAmps (void)
 
 static void v1_spindleSetRPM (float rpm, bool block)
 {
-    if (rpm != rpm_programmed) {
+    if (rpm != spindle_data.rpm_programmed) {
 
         uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_max50); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
 
@@ -128,10 +127,10 @@ static void v1_spindleSetRPM (float rpm, bool block)
         modbus_send(&rpm_cmd, &v1_callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-          spindle_data.rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100 ));
-          spindle_data.rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100 ));
+            spindle_data.rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100.0f));
+            spindle_data.rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100.0f));
         }
-        rpm_programmed = rpm;
+        spindle_data.rpm_programmed = rpm;
     }
 }
 
@@ -155,18 +154,13 @@ static void v1_spindleSetState (spindle_state_t state, float rpm)
     };
 
     if(vfd_state.ccw != state.ccw)
-        rpm_programmed = 0.0f;
+        spindle_data.rpm_programmed = 0.0f;
 
-    vfd_state.on = state.on;
-    vfd_state.ccw = state.ccw;
+    vfd_state.on = spindle_data.state_programmed.on = state.on;
+    vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &v1_callbacks, true))
         v1_spindleSetRPM(rpm, true);
-}
-
-static spindle_data_t *v1_spindleGetData (spindle_data_request_t request)
-{
-    return &spindle_data;
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -198,8 +192,8 @@ static spindle_state_t v1_spindleGetState (void)
     modbus_send(&amps_cmd, &v1_callbacks, false); // TODO: add flag for not raising alarm?
 
     // Get the actual RPM from spindle encoder input when available.
-    if(hal.spindle.get_data && hal.spindle.get_data != v1_spindleGetData) {
-        float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
+    if(on_get_data) {
+        float rpm = on_get_data(SpindleData_RPM)->rpm;
         vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
     }
 
@@ -288,7 +282,7 @@ static void v2_spindleGetMaxRPM (void)
 
 static void v2_spindleSetRPM (float rpm, bool block)
 {
-    if (rpm != rpm_programmed) {
+    if (rpm != spindle_data.rpm_programmed) {
 
         uint16_t data = (uint32_t)(rpm) * 10000UL / rpm_max;
 
@@ -309,10 +303,10 @@ static void v2_spindleSetRPM (float rpm, bool block)
         modbus_send(&rpm_cmd, &v2_callbacks, block);
 
         if(settings.spindle.at_speed_tolerance > 0.0f) {
-            spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
-            spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
+            spindle_data.rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100.0f));
+            spindle_data.rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100.0f));
         }
-        rpm_programmed = rpm;
+        spindle_data.rpm_programmed = rpm;
     }
 }
 
@@ -336,10 +330,10 @@ static void v2_spindleSetState (spindle_state_t state, float rpm)
     };
 
     if(vfd_state.ccw != state.ccw)
-        rpm_programmed = 0.0f;
+        spindle_data.rpm_programmed = 0.0f;
 
-    vfd_state.on = state.on;
-    vfd_state.ccw = state.ccw;
+    vfd_state.on = spindle_data.state_programmed.on = state.on;
+    vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &v2_callbacks, true))
         v2_spindleSetRPM(rpm, true);
@@ -364,8 +358,8 @@ static spindle_state_t v2_spindleGetState (void)
     modbus_send(&mode_cmd, &v2_callbacks, false); // TODO: add flag for not raising alarm?
 
     // Get the actual RPM from spindle encoder input when available.
-    if(hal.spindle.get_data && hal.spindle.get_data != spindleGetData) {
-        float rpm = hal.spindle.get_data(SpindleData_RPM)->rpm;
+    if(on_get_data) {
+        float rpm = on_get_data(SpindleData_RPM)->rpm;
         vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
     }
 
@@ -420,6 +414,20 @@ static float spindleGetLoad (void)
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
+    if(on_get_data) {
+
+        spindle_data_t *data;
+
+        data = on_get_data(request);
+        data->rpm_low_limit = spindle_data.rpm_low_limit;
+        data->rpm_high_limit = spindle_data.rpm_high_limit;
+        data->rpm_programmed = spindle_data.rpm_programmed;
+        data->state_programmed.on = spindle_data.state_programmed.on;
+        data->state_programmed.ccw = spindle_data.state_programmed.ccw;
+
+        return data;
+    }
+
     return &spindle_data;
 }
 
@@ -473,11 +481,15 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
 {
     if((v1_active = spindle_id == v1_spindle_id) || (v2_active = spindle_id == v2_spindle_id)) {
 
-        if(settings.spindle.ppr == 0)
-            hal.spindle.get_data = spindleGetData;
+        spindle_data.rpm_programmed = -1.0f;
 
-    } else if(hal.spindle.get_data == spindleGetData)
-        hal.spindle.get_data = NULL;
+        on_get_data = hal.spindle.get_data;
+        hal.spindle.get_data = spindleGetData;
+
+    } else if(hal.spindle.get_data == spindleGetData) {
+        hal.spindle.get_data = on_get_data;
+        on_get_data = NULL;
+    }
 
     if(on_spindle_select)
         on_spindle_select(spindle_id);
