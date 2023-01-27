@@ -10,7 +10,7 @@ Note that the setting value not the same as the VFD spindle number used in _my_m
  for configuration or output a list with the `$$=395` command to find the correct setting value.
 
 Switching between the configured VFD spindle and PWM output is possible via a M-code, currently `M104`: `M104P0` for PWM (laser) and `M104P1` for VFD.  
-Available when `\\#define DUAL_SPINDLE` is uncommented in _my_machine.h_ for drivers that has support.
+Available when [N_SPINDLE](https://github.com/grblHAL/core/blob/dbc170a571054f7019a1f10840591b7ff9f1b4cd/config.h#L58) is set > 1 in _grbl/config.h_ for drivers that has support.
 
 If all spindles are enabled `M104Q<n>` can be used to switch between them without changing the configuration. `<n>` is a spindle number as listed by the `$$=395` command.  
 
@@ -20,4 +20,4 @@ __NOTE:__ `M104` does not change the `$32` setting for machine mode, the setting
 __NOTE:__ currently all VFD spindles use the same ModBus address, configured by setting `$360` \(default 1\).  
 
 ---
-2022-06-18
+2023-01-17
