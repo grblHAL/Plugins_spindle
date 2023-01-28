@@ -452,11 +452,11 @@ static void onReportOptions (bool newopt)
 
     if(!newopt) {
 #if VFD_ENABLE == SPINDLE_ALL
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.08]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.09]" ASCII_EOL);
 #elif VFD_ENABLE == SPINDLE_HUANYANG1
-        hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.08]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG v1 VFD v0.09]" ASCII_EOL);
 #else
-        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.08]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG P2A VFD v0.09]" ASCII_EOL);
 #endif
     }
 }
@@ -483,8 +483,10 @@ static bool huanyang_spindle_select (spindle_id_t spindle_id)
 
         spindle_data.rpm_programmed = -1.0f;
 
-        on_get_data = hal.spindle.get_data;
-        hal.spindle.get_data = spindleGetData;
+        if(hal.spindle.get_data != spindleGetData) {
+            on_get_data = hal.spindle.get_data;
+            hal.spindle.get_data = spindleGetData;
+        }
 
     } else if(hal.spindle.get_data == spindleGetData) {
         hal.spindle.get_data = on_get_data;

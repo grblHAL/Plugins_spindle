@@ -185,6 +185,14 @@ static setting_details_t vfd_setting_details = {
     .save = vfd_settings_save
 };
 
+#ifdef GRBL_ESP32
+static void esp32_spindle_off (void)
+{
+    if(hal.spindle.set_state)
+    hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+}
+#endif
+
 static bool vfd_spindle_select (spindle_id_t spindle_id)
 {
     uint_fast8_t idx = n_spindle;
@@ -194,6 +202,9 @@ static bool vfd_spindle_select (spindle_id_t spindle_id)
     if(n_spindle) do {
         if(vfd_spindles[--idx].id == spindle_id) {
             memcpy(&vfd_spindle, &vfd_spindles[idx].vfd->vfd, sizeof(vfd_ptrs_t));
+#ifdef GRBL_ESP32
+            hal.spindle.esp32_off = esp32_spindle_off;
+#endif
             break;
         }
     } while(idx);
@@ -212,9 +223,6 @@ const vfd_ptrs_t *vfd_get_active (void)
 void vfd_init (void)
 {
     if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
-
-        on_spindle_select = grbl.on_spindle_select;
-        grbl.on_spindle_select = vfd_spindle_select;
 
         settings_register(&vfd_setting_details);
 
@@ -242,6 +250,9 @@ void vfd_init (void)
         extern void vfd_h100_init (void);
         vfd_h100_init();
 #endif
+
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = vfd_spindle_select;
     }
 }
 
