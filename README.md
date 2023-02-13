@@ -63,7 +63,7 @@ Use `M104Q<n>` where `<n>` is the _spindle number_ to set as the active spindle.
 
 * Up to 32 spindles can be added and up to four can be active at a time.  
 The spindle to control is adressed by the `$` gcode word followed by the spindle number,
-available for the `S`, `M3`, `M4`, `M5`, `M51`, `G33`, `G77`, `G94` and `G95` gcode commands.  
+available for the `S`, `M3`, `M4`, `M5`, `M51`, `G33`, `G76`, `G96` and `G97` gcode commands.  
 Spindle switching by tool number or `M104` is not available in this mode.  
 __NOTE:__ This mode is work in progress and functionality is not yet complete!
 
@@ -80,7 +80,7 @@ Available spindles with _spindle id_, and _spindle number_ if bound, can be list
 __NOTES:__ `$395` defaults to _spindle id_ 0, this is normally the driver provided PWM spindle but can be another spindle if only one spindle can be registered. Spindle 0 cannot be disabled.
 
 If the grblHAL is configured to handle only one active spindle at a time then $-settings can be used to assign a range of tool numbers to
-each spindle number. The spindle is then activated on a `M6T<n>` command where <n> is the tool number.
+each spindle number. The spindle is then activated on a `M6T<n>` command where `<n>` is the tool number.
 
 `$520` - lowest tool number for selecting spindle 0, ignored if 0 - normally leave at 0. If set > 0 tool numbers lower than the value will not cause a spindle change.  
 `$521` - lowest tool number for selecting spindle 1, ignored if 0.  
