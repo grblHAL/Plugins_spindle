@@ -40,10 +40,6 @@
 #include "../shared.h"
 #include "../modbus.h"
 
-#ifndef VFD_ADDRESS
-#define VFD_ADDRESS 0x01
-#endif
-
 #define VFD_RETRIES     25
 #define VFD_RETRY_DELAY 100
 
@@ -61,14 +57,18 @@ typedef enum {
 } vfd_response_t;
 
 typedef struct {
-    uint32_t modbus_address;
-    uint32_t vfd_rpm_hz;
-    uint32_t runstop_reg;
-    uint32_t set_freq_reg;
-    uint32_t get_freq_reg;
-    uint32_t run_cw_cmd;
-    uint32_t run_ccw_cmd;
-    uint32_t stop_cmd;
+#if N_SPINDLE > 1 || N_SYS_SPINDLE > 1
+    uint8_t modbus_address[4];
+#else
+    uint8_t modbus_address;
+#endif
+    uint16_t vfd_rpm_hz;
+    uint16_t runstop_reg;
+    uint16_t set_freq_reg;
+    uint16_t get_freq_reg;
+    uint16_t run_cw_cmd;
+    uint16_t run_ccw_cmd;
+    uint16_t stop_cmd;
     float in_multiplier;
     float in_divider;
     float out_multiplier;
@@ -90,5 +90,7 @@ extern vfd_settings_t vfd_config;
 
 spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name);
 const vfd_ptrs_t *vfd_get_active (void);
+bool vfd_failed (bool disable);
+uint32_t vfd_get_modbus_address (spindle_id_t spindle_id);
 
 #endif

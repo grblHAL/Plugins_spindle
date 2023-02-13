@@ -465,6 +465,13 @@ bool modbus_enabled (void)
     return nvs_address != 0;
 }
 
+void modbus_flush_queue (void)
+{
+    while(spin_lock);
+
+    tail = head;
+}
+
 void modbus_set_silence (const modbus_silence_timeout_t *timeout)
 {
     if(timeout)

@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2022 Terje Io
+  Copyright (c) 2022-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -36,5 +36,7 @@
 #define SPINDLE_YL620A      4
 #define SPINDLE_MODVFD      5
 #define SPINDLE_H100        6 // Not tested
+
+int8_t spindle_select_get_binding (spindle_id_t spindle_id);
 
 /**/

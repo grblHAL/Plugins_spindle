@@ -98,6 +98,7 @@ typedef struct {
 void modbus_init (void);
 bool modbus_isup (void);
 bool modbus_enabled (void);
+void modbus_flush_queue (void);
 void modbus_set_silence (const modbus_silence_timeout_t *timeout);
 bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block);
 modbus_state_t modbus_get_state (void);
