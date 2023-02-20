@@ -154,6 +154,8 @@ uint32_t vfd_get_modbus_address (spindle_id_t spindle_id)
 
 #endif
 
+#if N_SPINDLE_SELECTABLE > 1
+
 static bool is_vfd_spindle (const setting_detail_t *setting)
 {
     uint_fast8_t idx = n_spindle;
@@ -166,6 +168,19 @@ static bool is_vfd_spindle (const setting_detail_t *setting)
 
     return spindle && spindle->type == SpindleType_VFD;
 }
+
+#endif
+
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+
+#if N_SPINDLE == 1
+
+static bool is_modvfd_selected (const setting_detail_t *setting)
+{
+    return true;
+}
+
+#else
 
 static bool is_modvfd_selected (const setting_detail_t *setting)
 {
@@ -180,6 +195,21 @@ static bool is_modvfd_selected (const setting_detail_t *setting)
     return ok;
 }
 
+#endif
+
+#endif // VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+
+#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
+
+#if N_SPINDLE == 1
+
+static bool is_ysgl_selected (const setting_detail_t *setting)
+{
+    return true;
+}
+
+#else
+
 static bool is_ysgl_selected (const setting_detail_t *setting)
 {
     bool ok = false;
@@ -192,6 +222,10 @@ static bool is_ysgl_selected (const setting_detail_t *setting)
 
     return ok;
 }
+
+#endif
+
+#endif // VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
 
 static const setting_group_detail_t vfd_groups [] = {
     {Group_Root, Group_VFD, "VFD"}
