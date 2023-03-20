@@ -30,8 +30,8 @@
 
 #include "spindle.h"
 
-static uint32_t rpm_max = 0, modbus_address;
-static float amps = 0, amps_max = 0, rpm_max50 = 3000.0f;
+static uint32_t modbus_address;
+static float amps = 0.0f, amps_max = 0.0f, rpm_at_50Hz = 0.0f;
 static spindle_id_t spindle_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_state_t vfd_state = {0};
@@ -63,10 +63,10 @@ static const modbus_callbacks_t callbacks = {
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
-static void spindleGetMaxRPM (void)
+static void spindleGetRPMLimits (void)
 {
     modbus_message_t cmd = {
-        .context = (void *)VFD_GetMaxRPM50,
+        .context = (void *)VFD_GetRPMAt50Hz,
         .adu[0] = modbus_address,
         .adu[1] = ModBus_ReadCoils,
         .adu[2] = 0x03,
@@ -77,8 +77,22 @@ static void spindleGetMaxRPM (void)
         .rx_length = 8
     };
 
-    modbus_set_silence(&silence);
-    modbus_send(&cmd, &callbacks, true);
+    rpm_at_50Hz = 0.0f;
+
+    if(modbus_send(&cmd, &callbacks, true)) {
+
+        cmd.context = (void *)VFD_GetMinRPM;
+        cmd.adu[3] = 0x0B; // PD011
+
+        if(modbus_send(&cmd, &callbacks, true)) {
+            cmd.context = (void *)VFD_GetMaxRPM;
+            cmd.adu[3] = 0x05; // PD005
+            modbus_send(&cmd, &callbacks, true);
+        }
+    }
+
+    if(rpm_at_50Hz == 0.0f)
+        rpm_at_50Hz = 3000.0f;
 }
 
 // Read maximum configured current from spindle, value is used later for calculating spindle load
@@ -104,7 +118,7 @@ static void spindleSetRPM (float rpm, bool block)
 {
     if (rpm != spindle_data.rpm_programmed) {
 
-        uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_max50); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
+        uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_at_50Hz); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -203,19 +217,25 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * rpm_max50 / 5000.0f;
+                spindle_data.rpm = (float)((msg->adu[4] << 8) | msg->adu[5]) * rpm_at_50Hz / 5000.0f;
                 vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
                 break;
 
-            case VFD_GetMaxRPM:
-                rpm_max = (msg->adu[4] << 8) | msg->adu[5];
+            case VFD_GetMinRPM:
+                if(rpm_at_50Hz != 0.0f)
+                    spindle_hal->rpm_min = (float)((msg->adu[4] << 8) | msg->adu[5]) * rpm_at_50Hz / 5000.0f;
                 break;
 
-            case VFD_GetMaxRPM50:
-                if(spindle_hal) {
+            case VFD_GetMaxRPM:
+                if(rpm_at_50Hz != 0.0f) {
                     spindle_hal->cap.rpm_range_locked = On;
-                    spindle_hal->rpm_max = rpm_max50 = (float)((msg->adu[4] << 8) | msg->adu[5]);
+                    spindle_hal->rpm_max = (float)((msg->adu[4] << 8) | msg->adu[5]) * rpm_at_50Hz / 5000.0f;
                 }
+                break;
+
+            case VFD_GetRPMAt50Hz:
+                if(spindle_hal)
+                    rpm_at_50Hz = (float)((msg->adu[4] << 8) | msg->adu[5]);
                 break;
 
             case VFD_GetMaxAmps:
@@ -273,7 +293,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:HUANYANG VFD v0.10]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:HUANYANG VFD v0.11]" ASCII_EOL);
 }
 
 static void onDriverReset (void)
@@ -281,7 +301,8 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal) {
-        spindleGetMaxRPM();
+
+        spindleGetRPMLimits();
         spindleGetMaxAmps();
     }
 }
@@ -306,7 +327,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         modbus_set_silence(&silence);
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetMaxRPM();
+        spindleGetRPMLimits();
         spindleGetMaxAmps();
 
     } else
