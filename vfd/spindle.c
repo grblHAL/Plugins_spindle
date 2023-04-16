@@ -246,7 +246,7 @@ static const setting_detail_t vfd_settings[] = {
      { Setting_VFD_ModbusAddress, Group_VFD, "VFD spindle ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address, NULL, NULL },
 #endif
 #if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
-     { Setting_VFD_RPM_Hz, Group_VFD, "RPM per Hz", "", Format_Integer, "###0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, is_ysgl_selected },
+     { Setting_VFD_RPM_Hz, Group_VFD, "RPM per Hz", "", Format_Int16, "###0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, is_ysgl_selected },
 #endif
 #if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
      { Setting_VFD_10, Group_VFD, "Run/Stop Register (decimal)", NULL, Format_Int16, "####0", NULL, "65535", Setting_NonCore, &vfd_config.runstop_reg, NULL, is_modvfd_selected },
