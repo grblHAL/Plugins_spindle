@@ -1,10 +1,10 @@
 /*
 
-  modbus.c - a lightweight ModBus implementation
+  modbus_rtu.c - a lightweight ModBus RTU implementation
 
   Part of grblHAL
 
-  Copyright (c) 2020-2022 Terje Io
+  Copyright (c) 2020-2023 Terje Io
   except modbus_CRC16x which is Copyright (c) 2006 Christian Walter <wolti@sil.at>
   Lifted from his FreeModbus Libary
 
@@ -29,7 +29,7 @@
 #include "driver.h"
 #endif
 
-#if MODBUS_ENABLE
+#if MODBUS_ENABLE & MODBUS_RTU_ENABLED
 
 #include <string.h>
 
@@ -45,7 +45,7 @@
 #include "grbl/state_machine.h"
 #endif
 
-#include "modbus.h"
+#include "modbus_rtu.h"
 
 #ifndef MODBUS_BAUDRATE
 #define MODBUS_BAUDRATE 3 // 19200
@@ -85,7 +85,7 @@ static modbus_settings_t modbus;
 static volatile bool spin_lock = false, is_up = false;
 static volatile queue_entry_t *tail, *head, *packet = NULL;
 static volatile modbus_state_t state = ModBus_Idle;
-#if MODBUS_ENABLE == 2
+#if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED
 static uint8_t dir_port;
 #endif
 
@@ -272,7 +272,7 @@ static void modbus_poll_delay (sys_state_t grbl_state)
     modbus_poll();
 }
 
-bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block)
+bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block)
 {
     static queue_entry_t sync_msg = {0};
 
@@ -346,13 +346,6 @@ bool modbus_send (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bo
     }
 
     return !block;
-}
-
-modbus_state_t modbus_get_state (void)
-{
-    modbus_poll();
-
-    return state;
 }
 
 static void modbus_reset (void)
@@ -455,24 +448,19 @@ static void onReportOptions (bool newopt)
         hal.stream.write("[PLUGIN:MODBUS v0.14]" ASCII_EOL);
 }
 
-bool modbus_isup (void)
+static bool modbus_rtu_isup (void)
 {
     return is_up;
 }
 
-bool modbus_enabled (void)
-{
-    return nvs_address != 0;
-}
-
-void modbus_flush_queue (void)
+static void modbus_rtu_flush_queue (void)
 {
     while(spin_lock);
 
     tail = head;
 }
 
-void modbus_set_silence (const modbus_silence_timeout_t *timeout)
+static void modbus_rtu_set_silence (const modbus_silence_timeout_t *timeout)
 {
     if(timeout)
         memcpy(&silence, timeout, sizeof(modbus_silence_timeout_t));
@@ -500,7 +488,7 @@ static void pos_failed (uint_fast16_t state)
     report_message("Modbus failed to initialize!", Message_Warning);
 }
 
-#if MODBUS_ENABLE == 2
+#if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED
 static void modbus_set_direction (bool tx)
 {
     hal.port.digital_out(dir_port, tx);
@@ -527,7 +515,7 @@ static bool claim_stream (io_stream_properties_t const *sstream)
             stream.read = claimed->read;
             stream.flush_tx_buffer = claimed->reset_write_buffer;
             stream.flush_rx_buffer = claimed->reset_read_buffer;
-#if MODBUS_ENABLE == 2
+#if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED
             stream.set_direction = modbus_set_direction;
 #endif
             if(hal.periph_port.set_pin_description) {
@@ -541,10 +529,17 @@ static bool claim_stream (io_stream_properties_t const *sstream)
     return claimed != NULL;
 }
 
-void modbus_init (void)
+void modbus_rtu_init (void)
 {
+    const modbus_api_t api = {
+        .interface = Modbus_InterfaceRTU,
+        .is_up = modbus_rtu_isup,
+        .flush_queue = modbus_rtu_flush_queue,
+        .set_silence = modbus_rtu_set_silence,
+        .send = modbus_send_rtu
+    };
 
-#if MODBUS_ENABLE == 2
+#if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED
 
     uint8_t n_out = ioports_available(Port_Digital, Port_Output);
 
@@ -585,6 +580,8 @@ void modbus_init (void)
         uint_fast8_t idx;
         for(idx = 0; idx < MODBUS_QUEUE_LENGTH; idx++)
             queue[idx].next = idx == MODBUS_QUEUE_LENGTH - 1 ? &queue[0] : &queue[idx + 1];
+
+        modbus_register_api(&api);
 
         modbus_set_silence(NULL);
 

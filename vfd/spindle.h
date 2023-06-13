@@ -30,15 +30,16 @@
 #include "../../grbl/protocol.h"
 #include "../../grbl/state_machine.h"
 #include "../../grbl/report.h"
+#include "../../grbl/modbus.h"
 #else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
 #include "grbl/state_machine.h"
 #include "grbl/report.h"
+#include "grbl/modbus.h"
 #endif
 
 #include "../shared.h"
-#include "../modbus.h"
 
 #define VFD_RETRIES     25
 #define VFD_RETRY_DELAY 100
