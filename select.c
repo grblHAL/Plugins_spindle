@@ -343,7 +343,6 @@ static void spindle_settings_restore (void)
 // If load fails restore to default values.
 static void spindle_settings_load (void)
 {
-
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&spindle_setting, nvs_address, sizeof(spindle_setting), true) != NVS_TransferResult_OK)
         spindle_settings_restore();
 
@@ -390,6 +389,9 @@ static void warning_msg (uint_fast16_t state)
 int8_t spindle_select_get_binding (spindle_id_t spindle_id)
 {
     uint_fast8_t idx = N_SPINDLE;
+
+    if(spindle_id == settings.spindle.flags.type)
+        return 0;
 
     if(spindle_id >= 0) do {
         if(spindle_setting[--idx].spindle_id == spindle_id)

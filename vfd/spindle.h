@@ -43,6 +43,7 @@
 
 #define VFD_RETRIES     25
 #define VFD_RETRY_DELAY 100
+#define VFD_N_ADRESSES 4
 
 typedef enum {
     VFD_Idle = 0,
@@ -59,7 +60,7 @@ typedef enum {
 
 typedef struct {
 #if N_SPINDLE > 1 || N_SYS_SPINDLE > 1
-    uint8_t modbus_address[4];
+    uint8_t modbus_address[VFD_N_ADRESSES];
 #else
     uint8_t modbus_address;
 #endif
