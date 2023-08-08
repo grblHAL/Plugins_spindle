@@ -302,7 +302,7 @@ static void vfd_settings_save (void)
 static void vfd_settings_restore (void)
 {
 #if N_SPINDLE > 1 || N_SYS_SPINDLE > 1
-    uint_fast8_t idx = VFD_N_ADRESSES;
+    uint_fast8_t idx = N_SPINDLE;
     do {
         idx--;
         vfd_config.modbus_address[idx] = VFD_ADDRESS + idx;
