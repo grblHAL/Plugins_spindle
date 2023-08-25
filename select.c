@@ -38,7 +38,7 @@
 
 typedef struct {
     spindle_id_t spindle_id;
-    uint16_t min_tool;
+    tool_id_t min_tool_id;
 } spindle_binding_t;
 
 static spindle_binding_t spindle_setting[8];
@@ -108,7 +108,7 @@ static void tool_selected (tool_data_t *tool)
 
     if(select_by_tool) do {
         idx--;
-        if(spindle_setting[idx].spindle_id != -1 && (idx == 0 || spindle_setting[idx].min_tool > 0) && tool->tool >= spindle_setting[idx].min_tool)
+        if(spindle_setting[idx].spindle_id != -1 && (idx == 0 || spindle_setting[idx].min_tool_id > 0) && tool->tool_id >= spindle_setting[idx].min_tool_id)
             ok = spindle_select(idx == 0 ? settings.spindle.flags.type : spindle_setting[idx].spindle_id);
     } while(idx && !ok);
 
@@ -194,27 +194,27 @@ static const setting_detail_t spindle_settings[] = {
 #endif
 #if N_SYS_SPINDLE == 1
   #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleToolStart0, Group_Spindle, "Spindle 0 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[0].min_tool, NULL, is_setting2_available },
-    { Setting_SpindleToolStart1, Group_Spindle, "Spindle 1 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[1].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart0, Group_Spindle, "Spindle 0 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart1, Group_Spindle, "Spindle 1 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[1].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleToolStart2, Group_Spindle, "Spindle 2 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[2].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart2, Group_Spindle, "Spindle 2 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[2].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleToolStart3, Group_Spindle, "Spindle 3 tool numbert start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[3].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart3, Group_Spindle, "Spindle 3 tool numbert start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[3].min_tool_id, NULL, is_setting2_available },
   #endif
 /*
   #if N_SPINDLE > 4
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 4 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[4].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 4 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[4].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 5
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 5 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 5 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 6
-    { Setting_SpindleToolStart6, Group_Spindle, "Spindle 6 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart6, Group_Spindle, "Spindle 6 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 7
-    { Setting_SpindleToolStart7, Group_Spindle, "Spindle 7 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool, NULL, is_setting2_available },
+    { Setting_SpindleToolStart7, Group_Spindle, "Spindle 7 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
 */
 #endif // N_SYS_SPINDLE
@@ -307,7 +307,7 @@ static void spindle_settings_save (void)
 
     do {
         idx--;
-        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool > 0;
+        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool_id > 0;
     } while(idx && !select_by_tool);
 
     if(select_by_tool) {
@@ -333,7 +333,7 @@ static void spindle_settings_restore (void)
     do {
         idx--;
         spindle_setting[idx].spindle_id = idx == 0 ? 0 : -1;
-        spindle_setting[idx].min_tool = 0;
+        spindle_setting[idx].min_tool_id = 0;
     } while(idx);
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
@@ -354,7 +354,7 @@ static void spindle_settings_load (void)
 
     do {
         idx--;
-        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool > 0;
+        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool_id > 0;
     } while(idx && !select_by_tool);
 
     if(select_by_tool) {
