@@ -87,6 +87,7 @@ static void spindleSetRPM (float rpm, bool block)
             .adu[0] = modbus_address,
             .adu[1] = ModBus_WriteRegister,
             .adu[2] = 0x02,
+            .adu[3] = 0x01,
             .adu[4] = freq >> 8,
             .adu[5] = freq & 0xFF,
             .tx_length = 8,
@@ -226,7 +227,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:H-100 VFD v0.02]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:H-100 VFD v0.03]" ASCII_EOL);
 }
 
 static void onDriverReset (void)
