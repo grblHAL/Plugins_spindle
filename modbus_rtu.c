@@ -50,8 +50,12 @@
 #ifndef MODBUS_BAUDRATE
 #define MODBUS_BAUDRATE 3 // 19200
 #endif
-#ifndef MODBUS_SERIAL_PORT
-#define MODBUS_SERIAL_PORT -1
+#ifndef MODBUS_RTU_STREAM
+#ifdef MODBUS_SERIAL_PORT
+#define MODBUS_RTU_STREAM MODBUS_SERIAL_PORT // Use deprecated definition
+#else
+#define MODBUS_RTU_STREAM -1
+#endif
 #endif
 #ifndef MODBUS_DIR_AUX
 #define MODBUS_DIR_AUX    -1
@@ -445,7 +449,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.14]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.15]" ASCII_EOL);
 }
 
 static bool modbus_rtu_isup (void)
@@ -499,8 +503,8 @@ static bool claim_stream (io_stream_properties_t const *sstream)
 {
     io_stream_t const *claimed = NULL;
 
-#if MODBUS_SERIAL_PORT >= 0
-    if(sstream->type == StreamType_Serial && sstream->instance == MODBUS_SERIAL_PORT) {
+#if MODBUS_RTU_STREAM >= 0
+    if(sstream->type == StreamType_Serial && sstream->instance == MODBUS_RTU_STREAM) {
 #else
     if(sstream->type == StreamType_Serial && sstream->flags.modbus_ready && !sstream->flags.claimed) {
 #endif
