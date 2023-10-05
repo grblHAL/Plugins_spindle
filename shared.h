@@ -35,7 +35,8 @@
 #define SPINDLE_GS20        3
 #define SPINDLE_YL620A      4
 #define SPINDLE_MODVFD      5
-#define SPINDLE_H100        6 // Not tested
+#define SPINDLE_H100        6
+#define SPINDLE_STEPPER     7 // Work in progress
 
 int8_t spindle_select_get_binding (spindle_id_t spindle_id);
 
