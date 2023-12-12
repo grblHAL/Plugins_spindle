@@ -23,7 +23,7 @@
 
 #include "../shared.h"
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_H100
+#if SPINDLE_ENABLE & (1<<SPINDLE_H100)
 
 #include <math.h>
 #include <string.h>
@@ -75,7 +75,7 @@ static void spindleGetRPMLimits (void)
 
 static void spindleSetRPM (float rpm, bool block)
 {
-    if (rpm != spindle_data.rpm_programmed) {
+    if(rpm != spindle_data.rpm_programmed) {
 
         uint16_t freq = (uint16_t)(rpm * 0.167f); // * 10.0f / 60.0f
 
@@ -106,14 +106,18 @@ static void spindleSetRPM (float rpm, bool block)
     }
 }
 
-static void spindleUpdateRPM (float rpm)
+static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
+    UNUSED(spindle);
+
     spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void spindleSetState (spindle_state_t state, float rpm)
+static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
+    UNUSED(spindle);
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
@@ -137,8 +141,10 @@ static void spindleSetState (spindle_state_t state, float rpm)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t spindleGetState (void)
+static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
+    UNUSED(spindle);
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -279,6 +285,7 @@ void vfd_h100_init (void)
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,
+        .spindle.cap.cmd_controlled = On,
         .spindle.config = spindleConfig,
         .spindle.set_state = spindleSetState,
         .spindle.get_state = spindleGetState,

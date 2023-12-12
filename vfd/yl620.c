@@ -68,7 +68,7 @@
 
 #include "../shared.h"
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_YL620A
+#if SPINDLE_ENABLE & (1<<SPINDLE_YL620A)
 
 #include <math.h>
 #include <string.h>
@@ -145,19 +145,23 @@ static void spindleSetRPM (float rpm, bool block)
     retries = 0;
 }
 
-static void spindleUpdateRPM (float rpm)
+static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
+    UNUSED(spindle);
+
     spindleSetRPM(rpm, false);
 }
 
 // Start or stop spindle
-static void spindleSetState (spindle_state_t state, float rpm)
+static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
     static uint_fast8_t retries = 0;
 
     bool ok;
     uint8_t runstop = 0;
     uint8_t direction = 0;
+
+    UNUSED(spindle);
 
     if(retries)
         return; // block reentry
@@ -224,10 +228,12 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 }
 
 // Returns spindle state in a spindle_state_t variable
-static spindle_state_t spindleGetState (void)
+static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
     static uint32_t last_ms;
     uint32_t ms = hal.get_elapsed_ticks();
+
+    UNUSED(spindle);
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
@@ -378,6 +384,7 @@ void vfd_yl620_init (void)
         .spindle.cap.variable = On,
         .spindle.cap.at_speed = On,
         .spindle.cap.direction = On,
+        .spindle.cap.cmd_controlled = On,
         .spindle.config = spindleConfig,
         .spindle.set_state = spindleSetState,
         .spindle.get_state = spindleGetState,

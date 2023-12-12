@@ -45,6 +45,9 @@ static spindle_binding_t spindle_setting[8];
 
 static uint8_t n_spindle;
 static char format[110] = "";
+#if N_SYS_SPINDLE == 1 && N_SPINDLE_SELECTABLE > 1
+static char max_tool[] = "65535";
+#endif
 static nvs_address_t nvs_address;
 
 #if N_SYS_SPINDLE == 1
@@ -194,27 +197,27 @@ static const setting_detail_t spindle_settings[] = {
 #endif
 #if N_SYS_SPINDLE == 1
   #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleToolStart0, Group_Spindle, "Spindle 0 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available },
-    { Setting_SpindleToolStart1, Group_Spindle, "Spindle 1 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[1].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart0, Group_Spindle, "Spindle 0 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart1, Group_Spindle, "Spindle 1 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[1].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleToolStart2, Group_Spindle, "Spindle 2 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[2].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart2, Group_Spindle, "Spindle 2 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[2].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleToolStart3, Group_Spindle, "Spindle 3 tool numbert start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[3].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart3, Group_Spindle, "Spindle 3 tool numbert start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[3].min_tool_id, NULL, is_setting2_available },
   #endif
 /*
   #if N_SPINDLE > 4
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 4 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[4].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 4 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[4].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 5
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 5 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 5 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 6
-    { Setting_SpindleToolStart6, Group_Spindle, "Spindle 6 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart6, Group_Spindle, "Spindle 6 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
   #if N_SPINDLE > 7
-    { Setting_SpindleToolStart7, Group_Spindle, "Spindle 7 tool number start", NULL, Format_Int16, "####0", "0", "65535", Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
+    { Setting_SpindleToolStart7, Group_Spindle, "Spindle 7 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
   #endif
 */
 #endif // N_SYS_SPINDLE
@@ -362,7 +365,21 @@ static void spindle_settings_load (void)
         grbl.on_tool_selected = tool_selected;
     }
 
-#endif
+  #if N_SPINDLE_SELECTABLE > 1
+
+    if(grbl.tool_table.n_tools) {
+
+        idx = N_SPINDLE_SELECTABLE;
+        strcpy(max_tool, uitoa(grbl.tool_table.n_tools));
+
+        do {
+            idx--;
+            if(spindle_setting[idx].min_tool_id > grbl.tool_table.n_tools)
+                spindle_setting[idx].min_tool_id = grbl.tool_table.n_tools;
+        } while(idx);
+    }
+  #endif
+#endif // N_SYS_SPINDLE == 1
 
     protocol_enqueue_rt_command(activate_spindles);
 }

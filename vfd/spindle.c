@@ -37,7 +37,7 @@
 
 #include "spindle.h"
 
-#if VFD_ENABLE == SPINDLE_ALL && N_SPINDLE == 1
+#if SPINDLE_ENABLE == SPINDLE_ALL && N_SPINDLE == 1
 #warning Increase N_SPINDLE in grbl/config.h to a value high enough to accomodate all spindles.
 #endif
 
@@ -81,9 +81,9 @@ static void vfd_realtime_report (stream_write_ptr stream_write, report_tracking_
 }
 
 #ifdef GRBL_ESP32
-static void esp32_spindle_off (void)
+static void esp32_spindle_off (spindle_ptrs_t *spindle)
 {
-    spindle_get_hal(vfd_active, SpindleHAL_Active)->set_state((spindle_state_t){0}, 0.0f);
+    spindle_get_hal(vfd_active, SpindleHAL_Active)->set_state(spindle, (spindle_state_t){0}, 0.0f);
 }
 #endif
 
@@ -171,7 +171,7 @@ static bool is_vfd_spindle (const setting_detail_t *setting)
 
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+#if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
 
 #if N_SPINDLE == 1
 
@@ -197,9 +197,9 @@ static bool is_modvfd_selected (const setting_detail_t *setting)
 
 #endif
 
-#endif // VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+#endif // SPINDLE_MODVFD
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
+#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
 
 #if N_SPINDLE == 1
 
@@ -225,10 +225,10 @@ static bool is_ysgl_selected (const setting_detail_t *setting)
 
 #endif
 
-#endif // VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
+#endif // SPINDLE_GS20|SPINDLE_YL620A
 
 static const setting_group_detail_t vfd_groups [] = {
-    {Group_Root, Group_VFD, "VFD"}
+    { Group_Root, Group_VFD, "VFD" }
 };
 
 static const setting_detail_t vfd_settings[] = {
@@ -245,10 +245,10 @@ static const setting_detail_t vfd_settings[] = {
 #else
      { Setting_VFD_ModbusAddress, Group_VFD, "VFD spindle ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address, NULL, NULL },
 #endif
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
+#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
      { Setting_VFD_RPM_Hz, Group_VFD, "RPM per Hz", "", Format_Int16, "###0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, is_ysgl_selected },
 #endif
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+#if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
      { Setting_VFD_10, Group_VFD, "Run/Stop Register (decimal)", NULL, Format_Int16, "####0", NULL, "65535", Setting_NonCore, &vfd_config.runstop_reg, NULL, is_modvfd_selected },
      { Setting_VFD_11, Group_VFD, "Set Frequency Register (decimal)", "", Format_Int16, "####0", NULL, "65535", Setting_NonCore, &vfd_config.set_freq_reg, NULL, is_modvfd_selected },
      { Setting_VFD_12, Group_VFD, "Get Frequency Register (decimal)", NULL, Format_Int16, "####0", NULL, "65535", Setting_NonCore, &vfd_config.get_freq_reg, NULL, is_modvfd_selected },
@@ -276,10 +276,10 @@ static const setting_descr_t vfd_settings_descr[] = {
 #else
     { Setting_VFD_ModbusAddress, "VFD ModBus address" },
 #endif
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20 || VFD_ENABLE == SPINDLE_YL620A
+#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
     { Setting_VFD_RPM_Hz, "RPM/Hz value for GS20 and YL620A" },
 #endif
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+#if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
     { Setting_VFD_10, "MODVFD Register for Run/stop" },
     { Setting_VFD_11, "MODVFD Set Frequency Register" },
     { Setting_VFD_12, "MODVFD Get Frequency Register" },
@@ -405,34 +405,39 @@ void vfd_init (void)
 
         settings_register(&vfd_setting_details);
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_HUANYANG1
+#if SPINDLE_ENABLE & (1<<SPINDLE_HUANYANG1)
         extern void vfd_huanyang_init (void);
         vfd_huanyang_init();
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_HUANYANG2
+#if SPINDLE_ENABLE & (1<<SPINDLE_HUANYANG2)
         extern void vfd_huanyang2_init (void);
         vfd_huanyang2_init();
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_GS20
+#if SPINDLE_ENABLE & (1<<SPINDLE_GS20)
         extern void vfd_gs20_init (void);
         vfd_gs20_init();
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_YL620A
+#if SPINDLE_ENABLE & (1<<SPINDLE_YL620A)
         extern void vfd_yl620_init (void);
         vfd_yl620_init();
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_MODVFD
+#if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
         extern void vfd_modvfd_init (void);
         vfd_modvfd_init();
 #endif
 
-#if VFD_ENABLE == SPINDLE_ALL || VFD_ENABLE == SPINDLE_H100
+#if SPINDLE_ENABLE & (1<<SPINDLE_H100)
         extern void vfd_h100_init (void);
         vfd_h100_init();
+#endif
+
+#if SPINDLE_ENABLE & (1<<SPINDLE_NOWFOREVER)
+        extern void vfd_nowforever_init (void);
+        vfd_nowforever_init();
 #endif
 
         on_spindle_selected = grbl.on_spindle_selected;
