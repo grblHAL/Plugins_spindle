@@ -41,7 +41,7 @@ typedef struct {
 
 static uint8_t n_dout = 0, n_pwm_out = 0;
 static uint8_t port_pwm = 0, port_on = 0, port_dir = 255;
-static xbar_t *pwm_port = NULL;
+static xbar_t pwm_port;
 static spindle_id_t spindle_id = -1;
 static spindle_driver_settings_t spindle_config;
 static spindle_state_t spindle_state = {0};
@@ -91,6 +91,8 @@ static void spindleSetStateVariable (spindle_ptrs_t *spindle, spindle_state_t st
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
+    static bool config_ok = false;
+
     if(spindle == NULL)
         return false;
 
@@ -102,30 +104,27 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
     config.min_value = spindle_config.cfg.pwm_min_value;
     config.max_value = spindle_config.cfg.pwm_max_value;
     config.off_value = spindle_config.cfg.pwm_off_value;
+    config.invert = Off; // TODO: add setting
 
     spindle->cap.direction = port_dir != 255;
     spindle->cap.rpm_range_locked = On;
     spindle->rpm_min = spindle_config.cfg.rpm_min;
     spindle->rpm_max = spindle_config.cfg.rpm_max;
 
-    if(pwm_port->config(pwm_port, &config)) {
-        spindle->set_state = spindleSetStateVariable;
-    } else {
-//        if(pwmEnabled)
-            spindle->set_state(NULL, (spindle_state_t){0}, 0.0f);
+    if(config_ok) {
+        spindle->set_state(NULL, (spindle_state_t){0}, 0.0f);
+        system_add_rt_report(Report_Spindle);
+    } else
+        config_ok = true;
 
-        spindle->set_state = spindleSetState;
-    }
-/*
-    spindle_update_caps(spindle, spindle->cap.variable ? &spindle_pwm : NULL);
-*/
+    spindle->set_state = pwm_port.config(&pwm_port, &config) ? spindleSetStateVariable : spindleSetState;
 
     return true;
 }
 
 static void warn_disabled (sys_state_t state)
 {
-    report_message("PWM spindle failed initialization!", Message_Warning);
+    report_message("PWM2 spindle failed initialization!", Message_Warning);
 }
 
 static void pwm_spindle_register (void)
@@ -134,7 +133,7 @@ static void pwm_spindle_register (void)
         .type = SpindleType_PWM,
         .cap.direction = On,
         .cap.variable = On,
-        .cap.pwm_invert = On,
+//        .cap.pwm_invert = On,
         .cap.gpio_controlled = On,
         .config = spindleConfig,
         .update_rpm = spindleSetSpeed,
@@ -142,7 +141,7 @@ static void pwm_spindle_register (void)
         .get_state = spindleGetState
     };
 
-    if((spindle_id = spindle_register(&spindle, "PWM spindle")) != -1)
+    if((spindle_id = spindle_register(&spindle, "PWM2")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
         protocol_enqueue_rt_command(warn_disabled);
@@ -209,38 +208,40 @@ static status_code_t set_pwm_port (setting_id_t id, uint_fast16_t int_value)
 }
 
 static const setting_detail_t pwm_settings[] = {
-    { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Int8, "##0", "0", max_dport, Setting_NonCore, &spindle_config.port_on, NULL, NULL, { .reboot_required = On } },
-    { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle direction port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCore, &spindle_config.port_dir, NULL, NULL, { .reboot_required = On } },
-    { Setting_Spindle_PWMPort, Group_AuxPorts, "Spindle PWM port", NULL, Format_Int8, "#0", "0", max_aport, Setting_NonCoreFn, set_pwm_port, get_pwm_port, NULL, { .reboot_required = On } },
-    { Setting_RpmMax1, Group_Spindle, "Maximum spindle 1 speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsLegacy, &spindle_config.cfg.rpm_max, NULL, NULL },
-    { Setting_RpmMin1, Group_Spindle, "Minimum spindle 1 speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsLegacy, &spindle_config.cfg.rpm_min, NULL, NULL },
-    { Setting_PWMOffValue1, Group_Spindle, "Spindle 1 PWM off value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_off_value, NULL, NULL },
-    { Setting_PWMMinValue1, Group_Spindle, "Spindle 1 PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_min_value, NULL, NULL },
-    { Setting_PWMMaxValue1, Group_Spindle, "Spindle 1 PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_max_value, NULL, NULL }
+    { Setting_Spindle_OnPort, Group_AuxPorts, "PWM2 spindle on port", NULL, Format_Int8, "##0", "0", max_dport, Setting_NonCore, &spindle_config.port_on, NULL, NULL, { .reboot_required = On } },
+    { Setting_Spindle_DirPort, Group_AuxPorts, "PWM2 spindle direction port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCore, &spindle_config.port_dir, NULL, NULL, { .reboot_required = On } },
+    { Setting_Spindle_PWMPort, Group_AuxPorts, "PWM2 spindle PWM port", NULL, Format_Int8, "#0", "0", max_aport, Setting_NonCoreFn, set_pwm_port, get_pwm_port, NULL, { .reboot_required = On } },
+    { Setting_RpmMax1, Group_Spindle, "PWM2 spindle maximum speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsLegacy, &spindle_config.cfg.rpm_max, NULL, NULL },
+    { Setting_RpmMin1, Group_Spindle, "PWM2 spindle minimum speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsLegacy, &spindle_config.cfg.rpm_min, NULL, NULL },
+    { Setting_PWMFreq1, Group_Spindle, "PWM2 spindle PWM frequency", "Hz", Format_Decimal, "#####0", NULL, NULL, Setting_IsExtended, &spindle_config.cfg.pwm_freq, NULL, NULL },
+    { Setting_PWMOffValue1, Group_Spindle, "PWM2 spindle PWM off value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_off_value, NULL, NULL },
+    { Setting_PWMMinValue1, Group_Spindle, "PWM2 spindle PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_min_value, NULL, NULL },
+    { Setting_PWMMaxValue1, Group_Spindle, "PWM2 spindle PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &spindle_config.cfg.pwm_max_value, NULL, NULL }
 #if xENABLE_SPINDLE_LINEARIZATION
-     { Setting_LinearSpindle1Piece1, Group_Spindle, "Spindle 1 linearisation, 1st point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
+     { Setting_LinearSpindle1Piece1, Group_Spindle, "PWM2 spindle linearisation, 1st point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
   #if SPINDLE_NPWM_PIECES > 1
-     { Setting_LinearSpindle1Piece2, Group_Spindle, "Spindle 1 linearisation, 2nd point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
+     { Setting_LinearSpindle1Piece2, Group_Spindle, "PWM2 spindle linearisation, 2nd point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
   #endif
   #if SPINDLE_NPWM_PIECES > 2
-     { Setting_LinearSpindle1Piece3, Group_Spindle, "Spindle 1 linearisation, 3rd point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
+     { Setting_LinearSpindle1Piece3, Group_Spindle, "PWM2 spindle linearisation, 3rd point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
   #endif
   #if SPINDLE_NPWM_PIECES > 3
-     { Setting_LinearSpindle1Piece4, Group_Spindle, "Spindle 1 linearisation, 4th point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
+     { Setting_LinearSpindle1Piece4, Group_Spindle, "PWM2 spindle linearisation, 4th point", NULL, Format_String, "x(39)", NULL, "39", Setting_IsExtendedFn, set_linear_piece, get_linear_piece, NULL },
   #endif
 #endif
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t spindle_settings_descr[] = {
-    { Setting_Spindle_OnPort, "PWM spindle on/off aux port." },
-    { Setting_Spindle_DirPort, "PWM spindle direction aux port, set to -1 if not used." },
-    { Setting_Spindle_PWMPort, "PWM spindle analog aux port. Must be PWM capable!" },
-    { Setting_RpmMax1, "Maximum spindle 1 speed, can be overridden by spindle plugins." },
-    { Setting_RpmMin1, "Minimum spindle 1 speed, can be overridden by spindle plugins." },
-    { Setting_PWMOffValue1, "Spindle 1 PWM off value in percent (duty cycle)." },
-    { Setting_PWMMinValue1, "Spindle 1 PWM min value in percent (duty cycle)." },
-    { Setting_PWMMaxValue1, "Spindle 1 PWM max value in percent (duty cycle)." }
+    { Setting_Spindle_OnPort, "On/off aux port." },
+    { Setting_Spindle_DirPort, "Direction aux port, set to -1 if not used." },
+    { Setting_Spindle_PWMPort, "Spindle analog aux port. Must be PWM capable!" },
+    { Setting_RpmMax1, "Maximum spindle speed." },
+    { Setting_RpmMin1, "Minimum spindle speed." },
+    { Setting_PWMFreq1, "PWM frequency." },
+    { Setting_PWMOffValue1, "PWM off value in percent (duty cycle)." },
+    { Setting_PWMMinValue1, "PWM min value in percent (duty cycle)." },
+    { Setting_PWMMaxValue1, "PWM max value in percent (duty cycle)." }
 #if xENABLE_SPINDLE_LINEARIZATION
      { Setting_LinearSpindle1Piece1, "Comma separated list of values: RPM_MIN, RPM_LINE_A1, RPM_LINE_B1, set to blank to disable." },
   #if SPINDLE_NPWM_PIECES > 1
@@ -316,8 +317,8 @@ static void spindle_settings_restore (void)
     };
 
     spindle_config.port_pwm = port_pwm;
-    spindle_config.port_on = hal.port.num_digital_out - 1;
-    spindle_config.port_dir = hal.port.num_digital_out > 1 ? (float)(hal.port.num_digital_out - 1) : -1.0f;
+    spindle_config.port_on = n_dout;
+    spindle_config.port_dir = n_dout > 1 ? (float)(hal.port.num_digital_out - 1) : -1.0f;
     memcpy(&spindle_config.cfg, &defaults, sizeof(spindle_settings_t));
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_config, sizeof(spindle_driver_settings_t), true);
@@ -325,7 +326,8 @@ static void spindle_settings_restore (void)
 
 static void spindle_settings_load (void)
 {
-    bool ok;
+    bool ok = false;
+    xbar_t *port;
 
     if((hal.nvs.memcpy_from_nvs((uint8_t *)&spindle_config, nvs_address, sizeof(spindle_driver_settings_t), true) != NVS_TransferResult_OK))
         spindle_settings_restore();
@@ -334,14 +336,17 @@ static void spindle_settings_load (void)
     port_on = spindle_config.port_on;
     port_dir = spindle_config.port_dir == -1.0f ? 255 : (uint8_t)spindle_config.port_dir;
 
-    pwm_port = hal.port.get_pin_info(Port_Analog, Port_Output, port_pwm);
+    if((port = hal.port.get_pin_info(Port_Analog, Port_Output, port_pwm))) {
 
-    if((ok = pwm_port && pwm_port->cap.pwm && ioport_claim(Port_Analog, Port_Output, &port_pwm, "Spindle PWM"))) {
+        memcpy(&pwm_port, port, sizeof(xbar_t));
 
-        ok = ioport_claim(Port_Digital, Port_Output, &port_on, "PWM spindle on");
-        ok = ok && (port_dir == 255 || ioport_claim(Port_Digital, Port_Output, &port_dir, "PWM spindle dir"));
+        if((ok = pwm_port.cap.pwm && ioport_claim(Port_Analog, Port_Output, &port_pwm, "Spindle PWM"))) {
 
-//        strcpy(max_dport, uitoa(ioports_available(Port_Digital, Port_Output) - 1));
+            ok = ioport_claim(Port_Digital, Port_Output, &port_on, "PWM spindle on");
+            ok = ok && (port_dir == 255 || ioport_claim(Port_Digital, Port_Output, &port_dir, "PWM spindle dir"));
+
+    //        strcpy(max_dport, uitoa(ioports_available(Port_Digital, Port_Output) - 1));
+        }
     }
 
     if(ok)
@@ -371,7 +376,7 @@ bool pwm_claim (xbar_t *properties, uint8_t port, void *data)
     return false;
 }
 
-bool check_pwm_ports (void)
+static bool check_pwm_ports (void)
 {
     ioports_enumerate(Port_Analog, Port_Output, (pin_mode_t){ .pwm = On }, true, pwm_claim, NULL);
 
@@ -385,7 +390,7 @@ void pwm_spindle_init (void)
           (nvs_address = nvs_alloc(sizeof(spindle_driver_settings_t)))) {
 
         strcpy(max_aport, uitoa(port_pwm + 2));
-        strcpy(max_dport, uitoa(n_dout));
+        strcpy(max_dport, uitoa(n_dout - 1));
 
         settings_register(&pwm_setting_details);
     } else

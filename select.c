@@ -349,7 +349,7 @@ static void spindle_settings_load (void)
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&spindle_setting, nvs_address, sizeof(spindle_setting), true) != NVS_TransferResult_OK)
         spindle_settings_restore();
 
-    spindle_setting[0].spindle_id = 0; // always default spindle!
+    spindle_setting[0].spindle_id = settings.spindle.flags.type; // always default spindle!
 
 #if N_SYS_SPINDLE == 1
 
@@ -418,12 +418,8 @@ int8_t spindle_select_get_binding (spindle_id_t spindle_id)
     return -1;
 }
 
-void spindle_select_init (void)
+static void spindle_select_config (uint_fast16_t state)
 {
-    if((nvs_address = nvs_alloc(sizeof(spindle_setting)))) {
-
-        settings_register(&setting_details);
-
 #if N_SYS_SPINDLE > 1
 
         n_spindle = spindle_get_count();
@@ -443,6 +439,13 @@ void spindle_select_init (void)
         }
 
 #endif
+}
+
+void spindle_select_init (void)
+{
+    if((nvs_address = nvs_alloc(sizeof(spindle_setting)))) {
+        settings_register(&setting_details);
+        protocol_enqueue_rt_command(spindle_select_config); // delay plugin config until all spindles are registered
     } else
         protocol_enqueue_rt_command(warning_msg);
 }
