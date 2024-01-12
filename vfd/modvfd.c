@@ -192,7 +192,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
         .crc_check = false,
         .adu[0] = modbus_address,
         .adu[1] = ModBus_ReadHoldingRegisters,
-        .adu[2] = vfd_config.get_freq_reg >> 8 & 0xFF,
+        .adu[2] = vfd_config.get_freq_reg >> 8
         .adu[3] = vfd_config.get_freq_reg & 0xFF,
         .adu[4] = 0x00,
         .adu[5] = 0x01,
