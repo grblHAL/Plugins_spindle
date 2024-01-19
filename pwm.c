@@ -201,7 +201,7 @@ static status_code_t set_pwm_port (setting_id_t id, uint_fast16_t int_value)
     bool ok;
 
     if((ok = (uint8_t)int_value == spindle_config.port_pwm ||
-              ioports_enumerate(Port_Analog, Port_Output, (pin_mode_t){ .pwm = On }, true, pwm_port_validate, (void *)((uint32_t)int_value))))
+              ioports_enumerate(Port_Analog, Port_Output, (pin_cap_t){ .pwm = On, .claimable = On }, pwm_port_validate, (void *)((uint32_t)int_value))))
         spindle_config.port_pwm = (uint8_t)int_value;
 
     return ok ? Status_OK : Status_SettingValueOutOfRange;
@@ -378,7 +378,7 @@ bool pwm_claim (xbar_t *properties, uint8_t port, void *data)
 
 static bool check_pwm_ports (void)
 {
-    ioports_enumerate(Port_Analog, Port_Output, (pin_mode_t){ .pwm = On }, true, pwm_claim, NULL);
+    ioports_enumerate(Port_Analog, Port_Output, (pin_cap_t){ .pwm = On, .claimable = On }, pwm_claim, NULL);
 
     return n_pwm_out != 0;
 }
