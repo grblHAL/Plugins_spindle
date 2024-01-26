@@ -5,7 +5,7 @@
   Part of grblHAL
 
   Copyright (c) 2022 Andrew Marles
-  Copyright (c) 2022-2023 Terje Io
+  Copyright (c) 2022-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -369,14 +369,9 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
         on_spindle_selected(spindle);
 }
 
-static void raise_alarm (sys_state_t state)
+static void raise_alarm (void *data)
 {
     system_raise_alarm(Alarm_Spindle);
-}
-
-static void warn_disabled (sys_state_t state)
-{
-    report_message("VFD spindle has been disabled!", Message_Warning);
 }
 
 bool vfd_failed (bool disable)
@@ -384,12 +379,12 @@ bool vfd_failed (bool disable)
     bool ok = true;
 
     if(sys.cold_start)
-        protocol_enqueue_rt_command(raise_alarm);
+        protocol_enqueue_foreground_task(raise_alarm, NULL);
     else
         system_raise_alarm(Alarm_Spindle);
 
     if(disable && (ok = spindle_select(spindle_add_null())))
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "VFD spindle has been disabled!");
 
     return ok;
 }

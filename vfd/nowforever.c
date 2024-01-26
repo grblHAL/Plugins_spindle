@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023 Terje Io
+  Copyright (c) 2023-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -197,7 +197,7 @@ static void rx_packet (modbus_message_t *msg)
     }
 }
 
-static void raise_alarm (uint_fast16_t state)
+static void raise_alarm (void *data)
 {
     system_raise_alarm(Alarm_Spindle);
 }
@@ -207,7 +207,7 @@ static void rx_exception (uint8_t code, void *context)
     // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
     // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
     if(sys.cold_start)
-        protocol_enqueue_rt_command(raise_alarm);
+        protocol_enqueue_foreground_task(raise_alarm, NULL);
     else
         system_raise_alarm(Alarm_Spindle);
 }

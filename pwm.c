@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023 Terje Io
+  Copyright (c) 2023-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -122,11 +122,6 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
     return true;
 }
 
-static void warn_disabled (sys_state_t state)
-{
-    report_message("PWM2 spindle failed initialization!", Message_Warning);
-}
-
 static void pwm_spindle_register (void)
 {
     static const spindle_ptrs_t spindle = {
@@ -144,7 +139,7 @@ static void pwm_spindle_register (void)
     if((spindle_id = spindle_register(&spindle, "PWM2")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
 }
 
 #if ENABLE_SPINDLE_LINEARIZATION
@@ -352,7 +347,7 @@ static void spindle_settings_load (void)
     if(ok)
         pwm_spindle_register();
     else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
 }
 
 static setting_details_t pwm_setting_details = {
@@ -394,7 +389,7 @@ void pwm_spindle_init (void)
 
         settings_register(&pwm_setting_details);
     } else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
 }
 
 #endif

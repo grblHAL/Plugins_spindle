@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023 Terje Io
+  Copyright (c) 2023-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -68,11 +68,6 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
     return spindle_state;
 }
 
-static void warn_disabled (sys_state_t state)
-{
-    report_message("On/off spindle failed initialization!", Message_Warning);
-}
-
 static void onoff_spindle_register (void)
 {
     static const spindle_ptrs_t spindle = {
@@ -88,7 +83,7 @@ static void onoff_spindle_register (void)
     if((spindle_register(&spindle, "On/off spindle")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
 static const setting_detail_t vfd_settings[] = {
@@ -137,7 +132,7 @@ static void spindle_settings_load (void)
     if(ok)
         onoff_spindle_register();
     else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
 static setting_details_t vfd_setting_details = {
@@ -155,7 +150,7 @@ static setting_details_t vfd_setting_details = {
 void onoff_spindle_init (void)
 {
     if((n_dout = hal.port.num_digital_out) < N_PORTS)
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 
     else if(!ioport_can_claim_explicit()) {
         run.on_port = --hal.port.num_digital_out;
@@ -167,7 +162,7 @@ void onoff_spindle_init (void)
         hal.port.num_digital_out -= N_PORTS;
         settings_register(&vfd_setting_details);
     } else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
 #endif

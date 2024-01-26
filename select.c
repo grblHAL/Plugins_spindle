@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2022-2023 Terje Io
+  Copyright (c) 2022-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -277,7 +277,7 @@ static const setting_descr_t spindle_settings_descr[] = {
 #endif // N_SYS_SPINDLE
 };
 
-static void activate_spindles (uint_fast16_t state)
+static void activate_spindles (void *data)
 {
     spindle_id_t idx;
     const setting_detail_t *spindles;
@@ -381,7 +381,7 @@ static void spindle_settings_load (void)
   #endif
 #endif // N_SYS_SPINDLE == 1
 
-    protocol_enqueue_rt_command(activate_spindles);
+    protocol_enqueue_foreground_task(activate_spindles, NULL);
 }
 
 static setting_details_t setting_details = {
@@ -398,11 +398,6 @@ static setting_details_t setting_details = {
 
 #endif
 
-static void warning_msg (uint_fast16_t state)
-{
-    report_message("Spindle select plugin failed to initialize!", Message_Warning);
-}
-
 int8_t spindle_select_get_binding (spindle_id_t spindle_id)
 {
     uint_fast8_t idx = N_SPINDLE;
@@ -418,7 +413,7 @@ int8_t spindle_select_get_binding (spindle_id_t spindle_id)
     return -1;
 }
 
-static void spindle_select_config (uint_fast16_t state)
+static void spindle_select_config (void *data)
 {
 #if N_SYS_SPINDLE > 1
 
@@ -445,9 +440,9 @@ void spindle_select_init (void)
 {
     if((nvs_address = nvs_alloc(sizeof(spindle_setting)))) {
         settings_register(&setting_details);
-        protocol_enqueue_rt_command(spindle_select_config); // delay plugin config until all spindles are registered
+        protocol_enqueue_foreground_task(spindle_select_config, NULL); // delay plugin config until all spindles are registered
     } else
-        protocol_enqueue_rt_command(warning_msg);
+        protocol_enqueue_foreground_task(report_warning, "Spindle select plugin failed to initialize!");
 }
 
 #endif

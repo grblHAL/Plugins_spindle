@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2023 Terje Io
+  Copyright (c) 2020-2024 Terje Io
   except modbus_CRC16x which is Copyright (c) 2006 Christian Walter <wolti@sil.at>
   Lifted from his FreeModbus Libary
 
@@ -487,11 +487,6 @@ static bool stream_is_valid (const io_stream_t *stream)
                      stream->set_enqueue_rt_handler == NULL);
 }
 
-static void pos_failed (uint_fast16_t state)
-{
-    report_message("Modbus failed to initialize!", Message_Warning);
-}
-
 #if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED
 static void modbus_set_direction (bool tx)
 {
@@ -554,7 +549,7 @@ void modbus_rtu_init (void)
   #endif
 
     if(!(n_out > dir_port && ioport_claim(Port_Digital, Port_Output, &dir_port, "Modbus RX/TX direction"))) {
-        protocol_enqueue_rt_command(pos_failed);
+        protocol_enqueue_foreground_task(report_warning, "Modbus failed to initialize!");
         system_raise_alarm(Alarm_SelftestFailed);
         return;
     }
@@ -590,7 +585,7 @@ void modbus_rtu_init (void)
         modbus_set_silence(NULL);
 
     } else {
-        protocol_enqueue_rt_command(pos_failed);
+        protocol_enqueue_foreground_task(report_warning, "Modbus failed to initialize!");
         system_raise_alarm(Alarm_SelftestFailed);
     }
 }

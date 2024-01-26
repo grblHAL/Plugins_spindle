@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023 Terje Io
+  Copyright (c) 2023-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -172,10 +172,6 @@ static void raise_alarm (sys_state_t state)
     system_raise_alarm(Alarm_Spindle);
 }
 */
-static void warn_disabled (sys_state_t state)
-{
-    report_message("Stepper spindle has been disabled!", Message_Warning);
-}
 
 void stepper_spindle_init (void)
 {
@@ -203,7 +199,7 @@ void stepper_spindle_init (void)
         grbl.on_execute_delay = onExecuteDelay;
 
     } else
-        protocol_enqueue_rt_command(warn_disabled);
+        protocol_enqueue_foreground_task(report_warning, "Stepper spindle has been disabled!");
 }
 
 #endif

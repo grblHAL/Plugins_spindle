@@ -7,7 +7,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023 Terje Io
+  Copyright (c) 2023-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -293,7 +293,7 @@ static void spindle_settings_load (void)
     if(ok)
         onoff_spindle_register();
     else
-        protocol_enqueue_rt_command(warn_disabled);*/
+        protocol_enqueue_foreground_task(warn_disabled);*/
 }
 
 static setting_details_t vfd_setting_details = {
