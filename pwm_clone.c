@@ -9,18 +9,18 @@
 
   Copyright (c) 2023-2024 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 
 */
 
@@ -90,13 +90,13 @@ static bool Spindle1Configure (spindle_ptrs_t *spindle)
     spindle->rpm_min = spindle_config.clone.rpm_min;
     spindle->rpm_max = spindle_config.clone.rpm_max;
 
-    if(spindle0 && spindle0->context) {
-        spindle->context = &pwm_data;
+    if(spindle0 && spindle0->context.pwm) {
+        spindle->context.pwm = &pwm_data;
         spindle_config.clone.pwm_freq = settings.spindle.pwm_freq;
-        spindle_precompute_pwm_values(spindle, &pwm_data, &spindle_config.clone, ((spindle_pwm_t *)spindle0->context)->f_clock);
+        spindle_precompute_pwm_values(spindle, &pwm_data, &spindle_config.clone, spindle0->context.pwm->f_clock);
     }
 
-    return spindle->context != NULL;
+    return spindle->context.pwm != NULL;
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -109,13 +109,13 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         spindle->set_state = spindle0SetState;
         spindle->get_state = spindle0GetState;
         spindle->cap.direction = settings.mode == Mode_Laser;
-        ((spindle_pwm_t *)spindle->context)->cloned = On;
-        if(spindle->context) {
-            spindle1.context = &pwm_data;
+        spindle->context.pwm->cloned = On;
+        if(spindle->context.pwm) {
+            spindle1.context.pwm = &pwm_data;
             spindle_config.clone.pwm_freq = settings.spindle.pwm_freq;
-            spindle_precompute_pwm_values(&spindle1, &pwm_data, &spindle_config.clone, ((spindle_pwm_t *)spindle->context)->f_clock);
+            spindle_precompute_pwm_values(&spindle1, &pwm_data, &spindle_config.clone, spindle->context.pwm->f_clock);
         } else
-            spindle1.context = NULL;
+            spindle1.context.pwm = NULL;
     }
 }
 /*
@@ -211,7 +211,7 @@ static const setting_descr_t spindle_settings_descr[] = {
 
 static void spindle_settings_changed (settings_t *settings, settings_changed_flags_t changed)
 {
-    if(spindle1.context)
+    if(spindle1.context.pwm)
         Spindle1Configure(&spindle1);
 }
 
