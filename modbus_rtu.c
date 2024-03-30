@@ -8,18 +8,18 @@
   except modbus_CRC16x which is Copyright (c) 2006 Christian Walter <wolti@sil.at>
   Lifted from his FreeModbus Libary
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 
 */
 
@@ -216,17 +216,16 @@ static void modbus_poll (void)
             if(stream.get_rx_buffer_count() >= packet->msg.rx_length) {
 
                 char *buf = ((queue_entry_t *)packet)->msg.adu;
-
-                uint16_t rx_len = packet->msg.rx_length;        // store original length for CRC check
+                uint16_t rx_len = packet->msg.rx_length; // store original length for CRC check
 
                 do {
                     *buf++ = stream.read();
                 } while(--packet->msg.rx_length);
 
-                if (packet->msg.crc_check) {
+                if(packet->msg.crc_check) {
                     uint_fast16_t crc = modbus_CRC16x(((queue_entry_t *)packet)->msg.adu, rx_len - 2);
 
-                    if (packet->msg.adu[rx_len-2] != (crc & 0xFF) || packet->msg.adu[rx_len-1] != (crc >>8)) {
+                    if(packet->msg.adu[rx_len - 2] != (crc & 0xFF) || packet->msg.adu[rx_len - 1] != (crc >> 8)) {
                         // CRC check error
                         if((state = packet->async ? ModBus_Silent : ModBus_Exception) == ModBus_Silent) {
                             if(packet->callbacks.on_rx_exception)
@@ -236,12 +235,13 @@ static void modbus_poll (void)
                         silence_until = ms + silence_timeout;
                         break;
                     }
-
                 }
 
                 if((state = packet->async ? ModBus_Silent : ModBus_GotReply) == ModBus_Silent) {
-                    if(packet->callbacks.on_rx_packet)
+                    if(packet->callbacks.on_rx_packet) {
+                        packet->msg.rx_length = rx_len;
                         packet->callbacks.on_rx_packet(&((queue_entry_t *)packet)->msg);
+                    }
                     packet = NULL;
                 }
 

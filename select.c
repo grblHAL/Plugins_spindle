@@ -137,7 +137,7 @@ static void report_options (bool newopt)
 
 static bool is_setting2_available (const setting_detail_t *setting)
 {
-    return setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].spindle_id != -1;
+    return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].spindle_id != -1);
 }
 
 #endif
