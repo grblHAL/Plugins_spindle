@@ -38,15 +38,33 @@
 
 static spindle_id_t spindle_id = -1;
 static uint8_t axis_idx = N_AXIS - 1;
+static bool stopping = false, running = false;
 static st2_motor_t *motor;
 static spindle_data_t spindle_data = {0};
+static axes_signals_t steppers_enabled = {0};
 
 static on_spindle_selected_ptr on_spindle_selected;
 static on_execute_realtime_ptr on_execute_realtime = NULL, on_execute_delay;
+static stepper_enable_ptr stepper_enable;
+
+static void stepperEnable (axes_signals_t enable)
+{
+    steppers_enabled = enable;
+
+    if(running)
+        enable.mask |= 1 << axis_idx;
+
+    stepper_enable(enable);
+}
 
 static void onExecuteRealtime (uint_fast16_t state)
 {
-    st2_motor_run(motor);
+    if(!st2_motor_run(motor)) {
+        if(stopping) {
+            stopping = running = false;
+            stepperEnable(steppers_enabled);
+        }
+    }
 
     on_execute_realtime(state);
 }
@@ -65,6 +83,11 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     UNUSED(spindle);
 
     if(state.on) {
+
+        running = true;
+        stopping = false;
+        stepperEnable(steppers_enabled);
+
         if(st2_motor_running(motor)) {
             if(state.ccw != spindle_data.state_programmed.ccw) {
                 st2_motor_stop(motor);
@@ -76,13 +99,14 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         } else
             st2_motor_move(motor, state.ccw ? -1.0f : 1.0f, rpm, Stepper2_InfiniteSteps);
     } else
-        st2_motor_stop(motor);
+        stopping = st2_motor_stop(motor);
 
     if(settings.spindle.at_speed_tolerance > 0.0f) {
         float tolerance = rpm * settings.spindle.at_speed_tolerance / 100.0f;
         spindle_data.rpm_low_limit = rpm - tolerance;
         spindle_data.rpm_high_limit = rpm + tolerance;
     }
+
     spindle_data.state_programmed.on = state.on;
     spindle_data.state_programmed.ccw = state.ccw;
     spindle_data.rpm_programmed = spindle_data.rpm = rpm;
@@ -138,12 +162,9 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
     UNUSED(spindle);
 
-    state.on = st2_motor_running(motor);
-
-//    state.value ^= settings.spindle.invert.mask;
-
+    state.on = spindle_data.state_programmed.on;
     state.ccw = spindle_data.state_programmed.ccw;
-    state.at_speed = st2_motor_cruising(motor);
+    state.at_speed = running ? st2_motor_cruising(motor) : !running;
 
     return state;
 }
@@ -165,6 +186,7 @@ static void stepper_spindle_selected (spindle_ptrs_t *spindle)
     hal.spindle_data.reset = spindleDataReset;
 #endif
 }
+
 /*
 static void raise_alarm (sys_state_t state)
 {
@@ -196,6 +218,9 @@ void stepper_spindle_init (void)
 
         on_execute_delay = grbl.on_execute_delay;
         grbl.on_execute_delay = onExecuteDelay;
+
+        stepper_enable = hal.stepper.enable;
+        hal.stepper.enable = stepperEnable;
 
     } else
         protocol_enqueue_foreground_task(report_warning, "Stepper spindle has been disabled!");
