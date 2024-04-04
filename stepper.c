@@ -37,7 +37,7 @@
 #include "grbl/state_machine.h"
 
 static spindle_id_t spindle_id = -1;
-static uint8_t axis_idx = N_AXIS - 1;
+static const uint8_t axis_idx = N_AXIS - 1, axis_mask = 1 << (N_AXIS - 1);
 static bool stopping = false, running = false;
 static st2_motor_t *motor;
 static spindle_data_t spindle_data = {0};
@@ -52,7 +52,9 @@ static void stepperEnable (axes_signals_t enable)
     steppers_enabled = enable;
 
     if(running)
-        enable.mask |= 1 << axis_idx;
+        enable.mask |= axis_mask;
+    else if((settings.steppers.deenergize.mask & axis_mask) == 0)
+        enable.mask &= ~axis_mask;
 
     stepper_enable(enable);
 }
@@ -62,7 +64,7 @@ static void onExecuteRealtime (uint_fast16_t state)
     if(!st2_motor_run(motor)) {
         if(stopping) {
             stopping = running = false;
-            stepperEnable(steppers_enabled);
+            hal.stepper.enable(steppers_enabled);
         }
     }
 
@@ -86,7 +88,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
         running = true;
         stopping = false;
-        stepperEnable(steppers_enabled);
+        hal.stepper.enable(steppers_enabled);
 
         if(st2_motor_running(motor)) {
             if(state.ccw != spindle_data.state_programmed.ccw) {
