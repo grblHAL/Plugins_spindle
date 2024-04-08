@@ -94,7 +94,6 @@ static uint8_t dir_port;
 #endif
 
 static driver_reset_ptr driver_reset;
-static on_execute_realtime_ptr on_execute_realtime, on_execute_delay;
 static on_report_options_ptr on_report_options;
 static nvs_address_t nvs_address;
 
@@ -144,13 +143,10 @@ static inline void add_message (queue_entry_t *packet, modbus_message_t *msg, co
     }
 }
 
-static void modbus_poll (void)
+// called once every ms
+static void modbus_poll (void *data)
 {
-    static uint32_t last_ms;
-
-    uint32_t ms = hal.get_elapsed_ticks();
-
-    if(ms == last_ms || spin_lock) // check once every ms
+    if(spin_lock)
         return;
 
     spin_lock = true;
@@ -175,7 +171,7 @@ static void modbus_poll (void)
             break;
 
         case ModBus_Silent:
-            if(ms >= silence_until) {
+            if(hal.get_elapsed_ticks() >= silence_until) {
                 silence_until = 0;
                 state = ModBus_Idle;
             }
@@ -202,14 +198,14 @@ static void modbus_poll (void)
                 if(packet->async) {
                     state = ModBus_Silent;
                     packet = NULL;
-                } else if(stream.read() == 1 && (stream.read() & 0x80)) {
+                } else if(stream.read() == packet->msg.adu[0] && (stream.read() & 0x80)) {
                     exception_code = stream.read();
                     state = ModBus_Exception;
                 } else
                     state = ModBus_Timeout;
                 spin_lock = false;
                 if(state != ModBus_AwaitReply)
-                    silence_until = ms + silence_timeout;
+                    silence_until = hal.get_elapsed_ticks() + silence_timeout;
                 return;
             }
 
@@ -232,7 +228,7 @@ static void modbus_poll (void)
                                 packet->callbacks.on_rx_exception(0, packet->msg.context);
                             packet = NULL;
                         }
-                        silence_until = ms + silence_timeout;
+                        silence_until = hal.get_elapsed_ticks() + silence_timeout;
                         break;
                     }
                 }
@@ -245,35 +241,21 @@ static void modbus_poll (void)
                     packet = NULL;
                 }
 
-                silence_until = ms + silence_timeout;
+                silence_until = hal.get_elapsed_ticks() + silence_timeout;
             }
             break;
 
         case ModBus_Timeout:
-            state = ModBus_Silent;
-            silence_until = ms + silence_timeout;
+            if(packet->async)
+                state = ModBus_Silent;
+            silence_until = hal.get_elapsed_ticks() + silence_timeout;
             break;
 
         default:
             break;
     }
 
-    last_ms = ms;
     spin_lock = false;
-}
-
-static void modbus_poll_realtime (sys_state_t grbl_state)
-{
-    on_execute_realtime(grbl_state);
-
-    modbus_poll();
-}
-
-static void modbus_poll_delay (sys_state_t grbl_state)
-{
-    on_execute_delay(grbl_state);
-
-    modbus_poll();
 }
 
 bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block)
@@ -370,7 +352,7 @@ static void modbus_reset (void)
     }
 
     while(state != ModBus_Idle)
-        modbus_poll();
+        modbus_poll(NULL);
 
     driver_reset();
 }
@@ -449,7 +431,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.15]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:MODBUS v0.16]" ASCII_EOL);
 }
 
 static bool modbus_rtu_isup (void)
@@ -561,11 +543,7 @@ void modbus_rtu_init (void)
         driver_reset = hal.driver_reset;
         hal.driver_reset = modbus_reset;
 
-        on_execute_realtime = grbl.on_execute_realtime;
-        grbl.on_execute_realtime = modbus_poll_realtime;
-
-        on_execute_delay = grbl.on_execute_delay;
-        grbl.on_execute_delay = modbus_poll_delay;
+        task_add_systick(modbus_poll, NULL);
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
