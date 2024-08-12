@@ -262,6 +262,12 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
 {
     static queue_entry_t sync_msg = {0};
 
+    if(msg->tx_length > MODBUS_MAX_ADU_SIZE || msg->rx_length > MODBUS_MAX_ADU_SIZE) {
+        if(callbacks->on_rx_exception)
+            callbacks->on_rx_exception(0, msg->context);
+        return false;
+    }
+
     uint_fast16_t crc = modbus_CRC16x(msg->adu, msg->tx_length - 2);
 
     msg->adu[msg->tx_length - 1] = crc >> 8;

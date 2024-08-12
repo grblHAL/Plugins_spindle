@@ -7,20 +7,20 @@
   Part of grblHAL
 
   Copyright (c) 2022 Andrew Marles
-  Copyright (c) 2022-2023 Terje Io
+  Copyright (c) 2022-2024 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 
 */
 
@@ -39,10 +39,9 @@ static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal;
 static spindle_state_t vfd_state = {0};
 static spindle_data_t spindle_data = {0};
-static spindle_get_data_ptr on_get_data = NULL;
-static on_spindle_select_ptr on_spindle_select;
 static on_spindle_selected_ptr on_spindle_selected;
 static on_report_options_ptr on_report_options;
+static settings_changed_ptr settings_changed;
 static driver_reset_ptr driver_reset;
 
 static void rx_packet (modbus_message_t *msg);
@@ -84,9 +83,6 @@ static void spindleSetRPM (float rpm, bool block)
         .rx_length = 8
     };
 
-    vfd_state.at_speed = false;
-    spindle_data.rpm_programmed = rpm;
-
     do {
         if(!(ok = modbus_send(&rpm_cmd, &callbacks, block)))
             retries++;
@@ -95,10 +91,7 @@ static void spindleSetRPM (float rpm, bool block)
     if(!ok)
         vfd_failed(false);
 
-    if(settings.spindle.at_speed_tolerance > 0.0f) {
-        spindle_data.rpm_low_limit = rpm * (1.0f - (settings.spindle.at_speed_tolerance / 100.0f));
-        spindle_data.rpm_high_limit = rpm * (1.0f + (settings.spindle.at_speed_tolerance / 100.0f));
-    }
+    spindle_set_at_speed_range(spindle_hal, &spindle_data, rpm);
 
     retries = 0;
 }
@@ -162,20 +155,6 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
-    if(on_get_data) {
-
-        spindle_data_t *data;
-
-        data = on_get_data(request);
-        data->rpm_low_limit = spindle_data.rpm_low_limit;
-        data->rpm_high_limit = spindle_data.rpm_high_limit;
-        data->rpm_programmed = spindle_data.rpm_programmed;
-        data->state_programmed.on = spindle_data.state_programmed.on;
-        data->state_programmed.ccw = spindle_data.state_programmed.ccw;
-
-        return data;
-    }
-
     return &spindle_data;
 }
 
@@ -205,11 +184,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
         last_ms = ms;
     }
 
-    // Get the actual RPM from spindle encoder input when available.
-    if(on_get_data) {
-        float rpm = on_get_data(SpindleData_RPM)->rpm;
-        vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (rpm >= spindle_data.rpm_low_limit && rpm <= spindle_data.rpm_high_limit);
-    }
+    vfd_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
 
     return vfd_state; // return previous state as we do not want to wait for the response
 }
@@ -228,8 +203,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
-                spindle_data.rpm = f2rpm((msg->adu[3] << 8) | msg->adu[4]);
-                vfd_state.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
+                spindle_validate_at_speed(spindle_data, f2rpm((msg->adu[3] << 8) | msg->adu[4]));
                 retry_counter = 0;
                 break;
 
@@ -282,12 +256,12 @@ static void rx_exception (uint8_t code, void *context)
     }
 }
 
-static void OnReportOptions (bool newopt)
+static void onReportOptions (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODVFD v0.03]" ASCII_EOL);
+        report_plugin("MODVFD", "0.04");
 }
 
 static void onDriverReset (void)
@@ -295,16 +269,6 @@ static void onDriverReset (void)
     retry_counter = 0;
 
     driver_reset();
-}
-
-static bool onSpindleSelect (spindle_ptrs_t *spindle)
-{
-    if(spindle->id == spindle_id) {
-        on_get_data = spindle->get_data;
-        spindle->get_data = spindleGetData;
-    }
-
-    return on_spindle_select == NULL || on_spindle_select(spindle);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -326,33 +290,52 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         on_spindle_selected(spindle);
 }
 
+static void settingsChanged (settings_t *settings, settings_changed_flags_t changed)
+{
+    settings_changed(settings, changed);
+
+    if(changed.spindle) {
+
+        spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
+
+        spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
+        spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
+    }
+}
+
 void vfd_modvfd_init (void)
 {
-    static const vfd_spindle_ptrs_t spindle = {
-        .spindle.type = SpindleType_VFD,
-        .spindle.cap.variable = On,
-        .spindle.cap.at_speed = On,
-        .spindle.cap.direction = On,
-        .spindle.cap.cmd_controlled = On,
-        .spindle.config = spindleConfig,
-        .spindle.set_state = spindleSetState,
-        .spindle.get_state = spindleGetState,
-        .spindle.update_rpm = spindleUpdateRPM
+    static const vfd_spindle_ptrs_t vfd = {
+        .spindle = {
+            .type = SpindleType_VFD,
+            .cap = {
+                .variable = On,
+                .at_speed = On,
+                .direction = On,
+                .cmd_controlled = On
+            },
+            .config = spindleConfig,
+            .set_state = spindleSetState,
+            .get_state = spindleGetState,
+            .update_rpm = spindleUpdateRPM,
+            .get_data = spindleGetData,
+        }
     };
 
-    if((spindle_id = vfd_register(&spindle, "MODVFD")) != -1) {
-
-        on_spindle_select = grbl.on_spindle_select;
-        grbl.on_spindle_select = onSpindleSelect;
+    if((spindle_id = vfd_register(&vfd, "MODVFD")) != -1) {
 
         on_spindle_selected = grbl.on_spindle_selected;
         grbl.on_spindle_selected = onSpindleSelected;
 
+        settings_changed = hal.settings_changed;
+        hal.settings_changed = settingsChanged;
+
         on_report_options = grbl.on_report_options;
-        grbl.on_report_options = OnReportOptions;
+        grbl.on_report_options = onReportOptions;
 
         driver_reset = hal.driver_reset;
         hal.driver_reset = onDriverReset;
     }
 }
+
 #endif
