@@ -3,6 +3,7 @@ add_library(spindle INTERFACE)
 target_sources(spindle INTERFACE
  ${CMAKE_CURRENT_LIST_DIR}/modbus_rtu.c
  ${CMAKE_CURRENT_LIST_DIR}/select.c
+ ${CMAKE_CURRENT_LIST_DIR}/offset.c
  ${CMAKE_CURRENT_LIST_DIR}/onoff.c
  ${CMAKE_CURRENT_LIST_DIR}/pwm_clone.c
  ${CMAKE_CURRENT_LIST_DIR}/stepper.c
