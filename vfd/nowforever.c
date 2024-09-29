@@ -258,6 +258,7 @@ void vfd_nowforever_init (void)
     static const vfd_spindle_ptrs_t vfd = {
         .spindle = {
             .type = SpindleType_VFD,
+            .ref_id = SPINDLE_NOWFOREVER,
             .cap = {
                 .variable = On,
                 .at_speed = On,

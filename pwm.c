@@ -114,10 +114,13 @@ static void pwm_spindle_register (void)
 {
     static const spindle_ptrs_t spindle = {
         .type = SpindleType_PWM,
-        .cap.direction = On,
-        .cap.variable = On,
-//        .cap.pwm_invert = On,
-        .cap.gpio_controlled = On,
+        .ref_id = SPINDLE_PWM2,
+        .cap = {
+            .direction = On,
+            .variable = On,
+//          .pwm_invert = On,
+            .gpio_controlled = On
+        },
         .config = spindleConfig,
         .update_rpm = spindleSetSpeed,
         .set_state = spindleSetStateVariable,

@@ -260,6 +260,7 @@ void vfd_h100_init (void)
     static const vfd_spindle_ptrs_t vfd = {
         .spindle = {
             .type = SpindleType_VFD,
+            .ref_id = SPINDLE_H100,
             .cap = {
                 .variable = On,
                 .at_speed = On,

@@ -48,28 +48,40 @@ static on_execute_realtime_ptr on_execute_realtime = NULL, on_execute_delay;
 static stepper_enable_ptr stepper_enable;
 static settings_changed_ptr settings_changed;
 
-static void stepperEnable (axes_signals_t enable)
+static void stepperEnable (axes_signals_t enable, bool hold)
 {
     steppers_enabled = enable;
 
     if(running)
         enable.mask |= axis_mask;
-    else if((settings.steppers.deenergize.mask & axis_mask) == 0)
+    else if((settings.steppers.energize.mask & axis_mask) == 0)
         enable.mask &= ~axis_mask;
 
-    stepper_enable(enable);
+    stepper_enable(enable, hold);
+}
+
+static void onSpindleStopped (void *data)
+{
+    if(stopping) {
+        stopping = running = false;
+        hal.stepper.enable(steppers_enabled, hold);
+        if(hal.stepper.claim_motor)
+            hal.stepper.claim_motor(axis_idx, false);
+    }
 }
 
 static void onExecuteRealtime (uint_fast16_t state)
 {
-    if(!st2_motor_run(motor)) {
-        if(stopping) {
-            stopping = running = false;
-            hal.stepper.enable(steppers_enabled);
-        }
-    }
+    st2_motor_run(motor);
 
     on_execute_realtime(state);
+}
+
+static void onExecuteDelay (uint_fast16_t state)
+{
+    st2_motor_run(motor);
+
+    on_execute_delay(state);
 }
 
 static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
@@ -90,12 +102,16 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         running = true;
         stopping = false;
         hal.stepper.enable(steppers_enabled);
-
+        if(hal.stepper.claim_motor)
+            hal.stepper.claim_motor(axis_idx, true);
         if(st2_motor_running(motor)) {
             if(state.ccw != spindle_data.state_programmed.ccw) {
                 st2_motor_stop(motor);
-                while(st2_motor_running(motor))
-                    onExecuteRealtime(state_get());
+                while(st2_motor_running(motor)) {
+                	if(on_execute_realtime)
+                		onExecuteRealtime(state_get());
+                	// else run main loop?
+                }
                 st2_motor_move(motor, state.ccw ? -1.0f : 1.0f, rpm, Stepper2_InfiniteSteps);
             } else
                 st2_motor_set_speed(motor, rpm);
@@ -165,13 +181,6 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
     return state;
 }
 
-static void onExecuteDelay (uint_fast16_t state)
-{
-    st2_motor_run(motor);
-
-    on_execute_delay(state);
-}
-
 static void settingsChanged (settings_t *settings, settings_changed_flags_t changed)
 {
     settings_changed(settings, changed);
@@ -194,10 +203,20 @@ static void raise_alarm (sys_state_t state)
 }
 */
 
+#ifdef GRBL_ESP32
+
+static void esp32_spindle_off (spindle_ptrs_t *spindle)
+{
+    stopping = st2_motor_stop(motor);
+}
+
+#endif
+
 void stepper_spindle_init (void)
 {
     static const spindle_ptrs_t spindle = {
         .type = SpindleType_Stepper,
+        .ref_id = SPINDLE_STEPPER,
         .cap = {
             .variable = On,
             .at_speed = On,
@@ -208,18 +227,26 @@ void stepper_spindle_init (void)
         .config = spindleConfig,
         .set_state = spindleSetState,
         .get_state = spindleGetState,
+#ifdef GRBL_ESP32
+        .esp32_off = esp32_spindle_off,
+#endif
         .get_data = spindleGetData,
         .reset_data = spindleDataReset,
         .update_rpm = spindleUpdateRPM
     };
 
-    if(hal.get_micros && hal.stepper.output_step && (motor = st2_motor_init(axis_idx, true)) && (spindle_id = spindle_register(&spindle, "Stepper")) != -1) {
+    if((motor = st2_motor_init(axis_idx, true)) && (spindle_id = spindle_register(&spindle, "Stepper")) != -1) {
 
-        on_execute_realtime = grbl.on_execute_realtime;
-        grbl.on_execute_realtime = onExecuteRealtime;
+        if(st2_motor_poll(motor)) {
 
-        on_execute_delay = grbl.on_execute_delay;
-        grbl.on_execute_delay = onExecuteDelay;
+            on_execute_realtime = grbl.on_execute_realtime;
+            grbl.on_execute_realtime = onExecuteRealtime;
+
+            on_execute_delay = grbl.on_execute_delay;
+            grbl.on_execute_delay = onExecuteDelay;
+        }
+
+        st2_motor_register_stopped_callback(motor, onSpindleStopped);
 
         stepper_enable = hal.stepper.enable;
         hal.stepper.enable = stepperEnable;

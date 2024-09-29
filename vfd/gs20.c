@@ -303,6 +303,7 @@ void vfd_gs20_init (void)
     static const vfd_spindle_ptrs_t vfd = {
         .spindle = {
             .type = SpindleType_VFD,
+            .ref_id = SPINDLE_GS20,
             .cap = {
                 .variable = On,
                 .at_speed = On,

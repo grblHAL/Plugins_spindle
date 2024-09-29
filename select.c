@@ -35,11 +35,17 @@
 #if N_SPINDLE > 1
 
 #define N_SPINDLE_SETTINGS 8
+#define SETTING_OPTS { .subgroups = Off, .increment = 1, .reboot_required = On }
 
 typedef struct {
     spindle_id_t spindle_id;
     tool_id_t min_tool_id;
 } spindle_binding_t;
+
+typedef struct {
+    uint8_t idx;
+    uint8_t ref_id;
+} spindle_xx_t;
 
 static spindle_binding_t spindle_setting[N_SPINDLE_SETTINGS];
 
@@ -140,6 +146,18 @@ static bool is_setting2_available (const setting_detail_t *setting)
     return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].spindle_id != -1);
 }
 
+static bool event_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
+{
+    uint_fast16_t idx;
+
+    for(idx = 0; idx < N_SPINDLE_SELECTABLE; idx++) {
+        if(idx == 0 || spindle_setting[idx].spindle_id != -1)
+            callback(setting, idx, data);
+    }
+
+    return true;
+}
+
 #endif
 
 static bool is_setting1_available (const setting_detail_t *setting)
@@ -175,105 +193,59 @@ static uint32_t get_int (setting_id_t id)
 
 static const setting_detail_t spindle_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleEnable1, Group_Spindle, "Spindle 1", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable1, Group_Spindle, "Spindle 2", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleEnable2, Group_Spindle, "Spindle 2", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable2, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleEnable3, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable3, Group_Spindle, "Spindle 4", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 4
-    { Setting_SpindleEnable4, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable4, Group_Spindle, "Spindle 5", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 5
-    { Setting_SpindleEnable5, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable5, Group_Spindle, "Spindle 6", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 6
-    { Setting_SpindleEnable6, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable6, Group_Spindle, "Spindle 7", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SPINDLE_SELECTABLE > 7
-    { Setting_SpindleEnable7, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnable7, Group_Spindle, "Spindle 8", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
 #endif
 #if N_SYS_SPINDLE == 1
-  #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleToolStart0, Group_Spindle, "Spindle 0 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available },
-    { Setting_SpindleToolStart1, Group_Spindle, "Spindle 1 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[1].min_tool_id, NULL, is_setting2_available },
-  #endif
-  #if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleToolStart2, Group_Spindle, "Spindle 2 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[2].min_tool_id, NULL, is_setting2_available },
-  #endif
-  #if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleToolStart3, Group_Spindle, "Spindle 3 tool numbert start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[3].min_tool_id, NULL, is_setting2_available },
-  #endif
-/*
-  #if N_SPINDLE > 4
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 4 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[4].min_tool_id, NULL, is_setting2_available },
-  #endif
-  #if N_SPINDLE > 5
-    { Setting_SpindleToolStart4, Group_Spindle, "Spindle 5 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
-  #endif
-  #if N_SPINDLE > 6
-    { Setting_SpindleToolStart6, Group_Spindle, "Spindle 6 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
-  #endif
-  #if N_SPINDLE > 7
-    { Setting_SpindleToolStart7, Group_Spindle, "Spindle 7 tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[5].min_tool_id, NULL, is_setting2_available },
-  #endif
-*/
+    { Setting_SpindleToolStart0, Group_Spindle, "Spindle ? tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available, SETTING_OPTS },
 #endif // N_SYS_SPINDLE
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 
 static const setting_descr_t spindle_settings_descr[] = {
-#if N_SPINDLE > 1
-    { Setting_SpindleEnable1, "Spindle to use as spindle 1." },
+#if N_SPINDLE_SELECTABLE > 1
+    { Setting_SpindleEnable1, "Spindle to use as spindle 2." },
 #endif
-#if N_SPINDLE > 2
-    { Setting_SpindleEnable2, "Spindle to use as spindle 2." },
+#if N_SPINDLE_SELECTABLE > 2
+    { Setting_SpindleEnable2, "Spindle to use as spindle 3." },
 #endif
-#if N_SPINDLE > 3
-    { Setting_SpindleEnable3, "Spindle to use as spindle 3." },
+#if N_SPINDLE_SELECTABLE > 3
+    { Setting_SpindleEnable3, "Spindle to use as spindle 4." },
 #endif
-#if N_SYS_SPINDLE > 4
-    { Setting_SpindleEnable4, "Spindle to use as spindle 4." },
+#if N_SPINDLE_SELECTABLE > 4
+    { Setting_SpindleEnable4, "Spindle to use as spindle 5." },
 #endif
-#if N_SYS_SPINDLE > 5
-    { Setting_SpindleEnable5, "Spindle to use as spindle 5." },
-#endif
-#if N_SYS_SPINDLE > 5
+#if N_SPINDLE_SELECTABLE > 5
     { Setting_SpindleEnable5, "Spindle to use as spindle 6." },
 #endif
-#if N_SYS_SPINDLE > 5
+#if N_SPINDLE_SELECTABLE > 6
     { Setting_SpindleEnable5, "Spindle to use as spindle 7." },
 #endif
+#if N_SPINDLE_SELECTABLE > 7
+    { Setting_SpindleEnable5, "Spindle to use as spindle 8." },
+#endif
 #if N_SYS_SPINDLE == 1
-#if N_SPINDLE > 1
-    { Setting_SpindleToolStart0, "Start of tool numbers for selecting spindle 0 (default spindle).\\n"
-                                 "Normally leave this at 0."
-    },
-    { Setting_SpindleToolStart1, "Start of tool numbers for selecting spindle 1." },
-  #endif
-  #if N_SPINDLE > 2
-    { Setting_SpindleToolStart2, "Start of tool numbers for selecting spindle 2." },
-  #endif
-  #if N_SPINDLE > 3
-    { Setting_SpindleToolStart3, "Start of tool numbers for selecting spindle 3." },
-  #endif
-/*
-  #if N_SPINDLE > 4
-    { Setting_SpindleToolStart4, "Start of tool numbers for selecting spindle 4." },
-  #endif
-  #if N_SPINDLE > 5
-    { Setting_SpindleToolStart5, "Start of tool numbers for selecting spindle 5." },
-  #endif
-  #if N_SPINDLE > 5
-    { Setting_SpindleToolStart6, "Start of tool numbers for selecting spindle 6." },
-  #endif
-  #if N_SPINDLE > 5
-    { Setting_SpindleToolStart7, "Start of tool numbers for selecting spindle 7." },
-  #endif
-*/
+    { Setting_SpindleToolStart0, "Start of tool numbers for selecting the spindle.\\n"
+                                 "Normally leave this at 0 for spindle 1 (default spindle)."
+    }
 #endif // N_SYS_SPINDLE
 };
 
@@ -328,16 +300,44 @@ static void spindle_settings_save (void)
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
 }
 
+static void get_default_spindle (spindle_info_t *spindle, void *data)
+{
+    if(spindle->ref_id == ((spindle_xx_t *)data)->ref_id)
+        spindle_setting[((spindle_xx_t *)data)->idx].spindle_id = spindle->id;
+}
+
 // Restore default settings and write to non volatile storage (NVS).
 static void spindle_settings_restore (void)
 {
-    uint_fast8_t idx = N_SPINDLE_SETTINGS;
+    spindle_xx_t spd;
+
+    spd.idx = N_SPINDLE_SETTINGS;
 
     do {
-        idx--;
-        spindle_setting[idx].spindle_id = idx == 0 ? 0 : -1;
-        spindle_setting[idx].min_tool_id = 0;
-    } while(idx);
+        spd.idx--;
+        spindle_setting[spd.idx].spindle_id = spd.idx == 0 ? 0 : -1;
+        spd.ref_id = SPINDLE_NONE;
+        switch(spd.idx) {
+#if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE1)
+            case 1:
+                spd.ref_id = DEFAULT_SPINDLE1;
+                break;
+#endif
+#if N_SPINDLE_SELECTABLE > 2 && defined(DEFAULT_SPINDLE2)
+            case 2:
+                spd.ref_id = DEFAULT_SPINDLE2;
+                break;
+#endif
+#if N_SPINDLE_SELECTABLE > 3 && defined(DEFAULT_SPINDLE3)
+            case 3:
+                spd.ref_id = DEFAULT_SPINDLE3;
+                break;
+#endif
+        }
+        if(spd.ref_id != SPINDLE_NONE)
+            spindle_enumerate_spindles(get_default_spindle, &spd);
+        spindle_setting[spd.idx].min_tool_id = 0;
+    } while(spd.idx);
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
 }
@@ -410,7 +410,10 @@ static setting_details_t setting_details = {
 #endif
     .save = spindle_settings_save,
     .load = spindle_settings_load,
-    .restore = spindle_settings_restore
+    .restore = spindle_settings_restore,
+#if N_SYS_SPINDLE == 1
+    .iterator = event_settings_iterator
+#endif
 };
 
 #endif
@@ -434,21 +437,21 @@ static void spindle_select_config (void *data)
 {
 #if N_SYS_SPINDLE > 1
 
-        n_spindle = spindle_get_count();
+    n_spindle = spindle_get_count();
 
 #else
 
-        if((n_spindle = spindle_get_count()) > 1) {
+    if((n_spindle = spindle_get_count()) > 1) {
 
-            memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
+        memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
 
-            hal.user_mcode.check = check;
-            hal.user_mcode.validate = validate;
-            hal.user_mcode.execute = execute;
+        hal.user_mcode.check = check;
+        hal.user_mcode.validate = validate;
+        hal.user_mcode.execute = execute;
 
-            on_report_options = grbl.on_report_options;
-            grbl.on_report_options = report_options;
-        }
+        on_report_options = grbl.on_report_options;
+        grbl.on_report_options = report_options;
+    }
 
 #endif
 }

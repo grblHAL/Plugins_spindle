@@ -72,10 +72,13 @@ static void onoff_spindle_register (void)
 {
     static const spindle_ptrs_t spindle = {
         .type = SpindleType_Basic,
+        .ref_id = SPINDLE_ONOFF1,
+        .cap = {
 #if N_PORTS == 2
-        .cap.direction = On,
+            .direction = On,
 #endif
-        .cap.gpio_controlled = On,
+            .gpio_controlled = On
+        },
         .set_state = spindleSetState,
         .get_state = spindleGetState
     };
