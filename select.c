@@ -65,10 +65,10 @@ static on_tool_selected_ptr on_tool_selected = NULL;
 
 static user_mcode_t check (user_mcode_t mcode)
 {
-    return mcode == Spindle_Select ? mcode : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Ignore);
+    return mcode == Spindle_Select ? UserMCode_Normal : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Unsupported);
 }
 
-static status_code_t validate (parser_block_t *gc_block, parameter_words_t *deprecated)
+static status_code_t validate (parser_block_t *gc_block)
 {
     status_code_t state = Status_OK;
 
@@ -96,7 +96,7 @@ static status_code_t validate (parser_block_t *gc_block, parameter_words_t *depr
     } else
         state = Status_Unhandled;
 
-    return state == Status_Unhandled && user_mcode.validate ? user_mcode.validate(gc_block, deprecated) : state;
+    return state == Status_Unhandled && user_mcode.validate ? user_mcode.validate(gc_block) : state;
 }
 
 static void execute (sys_state_t state, parser_block_t *gc_block)
@@ -443,11 +443,11 @@ static void spindle_select_config (void *data)
 
     if((n_spindle = spindle_get_count()) > 1) {
 
-        memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
+        memcpy(&user_mcode, &grbl.user_mcode, sizeof(user_mcode_ptrs_t));
 
-        hal.user_mcode.check = check;
-        hal.user_mcode.validate = validate;
-        hal.user_mcode.execute = execute;
+        grbl.user_mcode.check = check;
+        grbl.user_mcode.validate = validate;
+        grbl.user_mcode.execute = execute;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = report_options;

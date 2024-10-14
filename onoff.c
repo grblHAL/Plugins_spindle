@@ -6,18 +6,18 @@
 
   Copyright (c) 2023-2024 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 
 */
 
@@ -27,14 +27,18 @@
 
 #if SPINDLE_ENABLE & ((1<<SPINDLE_ONOFF1)|(1<<SPINDLE_ONOFF1_DIR))
 
+#ifdef SPINDLE1_ENABLE_PIN
+#define ON_OFF_N_PORTS 0
+#elif SPINDLE_ENABLE & (1<<SPINDLE_ONOFF1_DIR)
+#define ON_OFF_N_PORTS 2
+#else
+#define ON_OFF_N_PORTS 1
+#endif
+
+#if ON_OFF_N_PORTS
+
 #include "grbl/protocol.h"
 #include "grbl/nvs_buffer.h"
-
-#if SPINDLE_ENABLE & (1<<SPINDLE_ONOFF1_DIR)
-#define N_PORTS 2
-#else
-#define N_PORTS 1
-#endif
 
 typedef struct {
     uint8_t on_port;
@@ -74,7 +78,7 @@ static void onoff_spindle_register (void)
         .type = SpindleType_Basic,
         .ref_id = SPINDLE_ONOFF1,
         .cap = {
-#if N_PORTS == 2
+#if ON_OFF_N_PORTS == 2
             .direction = On,
 #endif
             .gpio_controlled = On
@@ -91,7 +95,7 @@ static void onoff_spindle_register (void)
 
 static const setting_detail_t vfd_settings[] = {
     { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Int8, "#0", "0", max_dport, Setting_NonCore, &spindle_config.on_port, NULL, NULL, { .reboot_required = On } },
-#if N_PORTS == 2
+#if ON_OFF_N_PORTS == 2
     { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Int8, "#0", "0", max_dport, Setting_NonCore, &spindle_config.dir_port, NULL, NULL, { .reboot_required = On } }
 #endif
 };
@@ -99,7 +103,7 @@ static const setting_detail_t vfd_settings[] = {
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t spindle_settings_descr[] = {
     { Setting_Spindle_OnPort, "Spindle  0 (default spindle) VFD ModBus address" },
-#if N_PORTS == 2
+#if ON_OFF_N_PORTS == 2
     { Setting_Spindle_DirPort, "Spindle 1 VFD ModBus address" }
 #endif
 };
@@ -129,7 +133,7 @@ static void spindle_settings_load (void)
     strcpy(max_dport, uitoa(max(n_dout, ioports_available(Port_Digital, Port_Output)) - 1));
 
     ok = ioport_claim(Port_Digital, Port_Output, &run.on_port, "Spindle on");
-#if N_PORTS == 2
+#if ON_OFF_N_PORTS == 2
     ok = ok && ioport_claim(Port_Digital, Port_Output, &run.dir_port, "Spindle direction");
 #endif
     if(ok)
@@ -152,20 +156,29 @@ static setting_details_t vfd_setting_details = {
 
 void onoff_spindle_init (void)
 {
-    if((n_dout = hal.port.num_digital_out) < N_PORTS)
+    if((n_dout = hal.port.num_digital_out) < ON_OFF_N_PORTS)
         protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 
     else if(!ioport_can_claim_explicit()) {
         run.on_port = --hal.port.num_digital_out;
-#if N_PORTS == 2
+#if ON_OFF_N_PORTS == 2
         run.dir_port = --hal.port.num_digital_out;
 #endif
         onoff_spindle_register();
     } else if((nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t)))) {
-        hal.port.num_digital_out -= N_PORTS;
+        hal.port.num_digital_out -= ON_OFF_N_PORTS;
         settings_register(&vfd_setting_details);
     } else
         protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
+#else // ON_OFF_N_PORTS == 0
+
+// Dummy init for when the base driver provides the spindle implementation
+void onoff_spindle_init (void)
+{
+}
+
 #endif
+
+#endif // SPINDLE_ENABLE
