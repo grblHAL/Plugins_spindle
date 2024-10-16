@@ -63,7 +63,7 @@ static user_mcode_ptrs_t user_mcode;
 static on_report_options_ptr on_report_options;
 static on_tool_selected_ptr on_tool_selected = NULL;
 
-static user_mcode_t check (user_mcode_t mcode)
+static user_mcode_type_t check (user_mcode_t mcode)
 {
     return mcode == Spindle_Select ? UserMCode_Normal : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Unsupported);
 }
