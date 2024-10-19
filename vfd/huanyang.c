@@ -271,7 +271,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin(":HUANYANG VFD", "0.12");
+        report_plugin("HUANYANG VFD", "0.12");
 }
 
 static void onDriverReset (void)
