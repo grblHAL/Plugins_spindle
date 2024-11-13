@@ -161,7 +161,9 @@ static bool is_vfd_spindle (const setting_detail_t *setting)
     uint_fast8_t idx = n_spindle;
     spindle_ptrs_t *spindle = NULL;
 
-    if(idx > 0) do {
+    if(setting->id == Setting_VFD_ModbusAddress)
+        spindle = spindle_get_hal(vfd_spindles[0].id, SpindleHAL_Raw);
+    else if(idx > 0) do {
         if(spindle_select_get_binding(vfd_spindles[--idx].id) == (setting->id - Setting_VFD_ModbusAddress0))
             spindle = spindle_get_hal(vfd_spindles[idx].id, SpindleHAL_Raw);
     } while(idx && spindle == NULL);
@@ -233,14 +235,14 @@ static const setting_group_detail_t vfd_groups [] = {
 
 static const setting_detail_t vfd_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
-// TODO: somehow add Setting_VFD_ModbusAddress as a hidden synonym for Setting_VFD_ModbusAddress0
-     { Setting_VFD_ModbusAddress0, Group_VFD, "Spindle 0 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[0], NULL, is_vfd_spindle },
-     { Setting_VFD_ModbusAddress1, Group_VFD, "Spindle 1 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[1], NULL, is_vfd_spindle },
+     { Setting_VFD_ModbusAddress, Group_VFD, "", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[0], NULL, is_vfd_spindle, { .hidden = On } },
+     { Setting_VFD_ModbusAddress0, Group_VFD, "Spindle 1 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[0], NULL, is_vfd_spindle },
+     { Setting_VFD_ModbusAddress1, Group_VFD, "Spindle 2 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[1], NULL, is_vfd_spindle },
   #if N_SPINDLE_SELECTABLE > 2
-     { Setting_VFD_ModbusAddress2, Group_VFD, "Spindle 2 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[2], NULL, is_vfd_spindle },
+     { Setting_VFD_ModbusAddress2, Group_VFD, "Spindle 3 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[2], NULL, is_vfd_spindle },
   #endif
   #if N_SPINDLE_SELECTABLE > 3
-     { Setting_VFD_ModbusAddress3, Group_VFD, "Spindle 3 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[3], NULL, is_vfd_spindle },
+     { Setting_VFD_ModbusAddress3, Group_VFD, "Spindle 4 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[3], NULL, is_vfd_spindle },
   #endif
 #else
      { Setting_VFD_ModbusAddress, Group_VFD, "VFD spindle ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address, NULL, NULL },
@@ -265,13 +267,13 @@ static const setting_detail_t vfd_settings[] = {
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t vfd_settings_descr[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_VFD_ModbusAddress0, "Spindle  0 (default spindle) VFD ModBus address" },
-    { Setting_VFD_ModbusAddress1, "Spindle 1 VFD ModBus address" },
+    { Setting_VFD_ModbusAddress0, "Spindle 1 (default spindle) VFD ModBus address" },
+    { Setting_VFD_ModbusAddress1, "Spindle 2 ModBus address" },
   #if N_SPINDLE_SELECTABLE > 2
-    { Setting_VFD_ModbusAddress2, "Spindle 2 VFD ModBus address" },
+    { Setting_VFD_ModbusAddress2, "Spindle 3 ModBus address" },
   #endif
   #if N_SPINDLE_SELECTABLE > 3
-    { Setting_VFD_ModbusAddress3, "Spindle 3 VFD ModBus address" },
+    { Setting_VFD_ModbusAddress3, "Spindle 4 ModBus address" },
   #endif
 #else
     { Setting_VFD_ModbusAddress, "VFD ModBus address" },

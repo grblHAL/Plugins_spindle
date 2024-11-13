@@ -22,6 +22,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "driver.h"
+
 #ifdef ARDUINO
 #include "../grbl/hal.h"
 #include "../grbl/nvs_buffer.h"
@@ -146,7 +148,7 @@ static bool is_setting2_available (const setting_detail_t *setting)
     return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].spindle_id != -1);
 }
 
-static bool event_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
+static bool spindle_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
 {
     uint_fast16_t idx;
 
@@ -318,19 +320,19 @@ static void spindle_settings_restore (void)
         spindle_setting[spd.idx].spindle_id = spd.idx == 0 ? 0 : -1;
         spd.ref_id = SPINDLE_NONE;
         switch(spd.idx) {
-#if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE1)
+#if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE2)
             case 1:
-                spd.ref_id = DEFAULT_SPINDLE1;
-                break;
-#endif
-#if N_SPINDLE_SELECTABLE > 2 && defined(DEFAULT_SPINDLE2)
-            case 2:
                 spd.ref_id = DEFAULT_SPINDLE2;
                 break;
 #endif
-#if N_SPINDLE_SELECTABLE > 3 && defined(DEFAULT_SPINDLE3)
-            case 3:
+#if N_SPINDLE_SELECTABLE > 2 && defined(DEFAULT_SPINDLE3)
+            case 2:
                 spd.ref_id = DEFAULT_SPINDLE3;
+                break;
+#endif
+#if N_SPINDLE_SELECTABLE > 3 && defined(DEFAULT_SPINDLE4)
+            case 3:
+                spd.ref_id = DEFAULT_SPINDLE4;
                 break;
 #endif
         }
@@ -412,7 +414,7 @@ static setting_details_t setting_details = {
     .load = spindle_settings_load,
     .restore = spindle_settings_restore,
 #if N_SYS_SPINDLE == 1
-    .iterator = event_settings_iterator
+    .iterator = spindle_settings_iterator
 #endif
 };
 
