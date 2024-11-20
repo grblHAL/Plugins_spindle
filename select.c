@@ -40,23 +40,20 @@
 #define SETTING_OPTS { .subgroups = Off, .increment = 1, .reboot_required = On }
 
 typedef struct {
-    spindle_id_t spindle_id;
+    spindle_id_t ref_id; // TODO: change to uint8_t
     tool_id_t min_tool_id;
 } spindle_binding_t;
 
-typedef struct {
-    uint8_t idx;
-    uint8_t ref_id;
-} spindle_xx_t;
-
-static spindle_binding_t spindle_setting[N_SPINDLE_SETTINGS];
-
 static uint8_t n_spindle;
+static spindle_id_t default_spindle_id;
+static uint8_t ref_id_map[N_SPINDLE_SETTINGS]; // maps spindle.ref_id to spindle.id, spindle.id is the index
+static spindle_binding_t spindle_setting[N_SPINDLE_SETTINGS];
 static char format[110] = "";
 #if N_SYS_SPINDLE == 1 && N_SPINDLE_SELECTABLE > 1
 static char max_tool[] = "65535";
 #endif
 static nvs_address_t nvs_address;
+static driver_setup_ptr driver_setup;
 
 #if N_SYS_SPINDLE == 1
 
@@ -64,6 +61,8 @@ static bool select_by_tool = false;
 static user_mcode_ptrs_t user_mcode;
 static on_report_options_ptr on_report_options;
 static on_tool_selected_ptr on_tool_selected = NULL;
+
+static spindle_id_t get_spindle_id (uint8_t ref_id);
 
 static user_mcode_type_t check (user_mcode_t mcode)
 {
@@ -79,12 +78,12 @@ static status_code_t validate (parser_block_t *gc_block)
         if(gc_block->words.p) {
             if(isnanf(gc_block->values.p))
                 state = Status_GcodeValueWordMissing;
-            else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f && spindle_setting[(uint32_t)gc_block->values.p].spindle_id != -1))
+            else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f && spindle_setting[(uint32_t)gc_block->values.p].ref_id != SPINDLE_NONE))
                 state = Status_GcodeValueOutOfRange;
         } else if(gc_block->words.q) {
             if(isnanf(gc_block->values.q))
                 state = Status_GcodeValueWordMissing;
-            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q < (float)N_SPINDLE_SETTINGS && spindle_setting[(uint32_t)gc_block->values.q].spindle_id != -1))
+            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q < (float)N_SPINDLE_SETTINGS && spindle_setting[(uint32_t)gc_block->values.q].ref_id != SPINDLE_NONE))
                 state = Status_GcodeValueOutOfRange;
         } else
             state = Status_GcodeValueWordMissing;
@@ -105,9 +104,9 @@ static void execute (sys_state_t state, parser_block_t *gc_block)
 {
     if(gc_block->user_mcode == Spindle_Select) {
         if(gc_block->words.p)
-            spindle_select((spindle_id_t)(gc_block->values.p == 0.0f ? 0 : settings.spindle.flags.type));
+            spindle_select((spindle_id_t)(gc_block->values.p == 0.0f ? default_spindle_id : get_spindle_id(spindle_setting[1].ref_id)));
         else
-            spindle_select(spindle_setting[(uint32_t)gc_block->values.q].spindle_id);
+            spindle_select(get_spindle_id(spindle_setting[(uint32_t)gc_block->values.q].ref_id));
     } else if(user_mcode.execute)
         user_mcode.execute(state, gc_block);
 }
@@ -119,8 +118,8 @@ static void tool_selected (tool_data_t *tool)
 
     if(select_by_tool) do {
         idx--;
-        if(spindle_setting[idx].spindle_id != -1 && (idx == 0 || spindle_setting[idx].min_tool_id > 0) && tool->tool_id >= spindle_setting[idx].min_tool_id)
-            ok = spindle_select(idx == 0 ? settings.spindle.flags.type : spindle_setting[idx].spindle_id);
+        if(spindle_setting[idx].ref_id != SPINDLE_NONE && (idx == 0 || spindle_setting[idx].min_tool_id > 0) && tool->tool_id >= spindle_setting[idx].min_tool_id)
+            ok = spindle_select(idx == 0 ? default_spindle_id : get_spindle_id(spindle_setting[idx].ref_id));
     } while(idx && !ok);
 
     if(on_tool_selected)
@@ -145,7 +144,7 @@ static void report_options (bool newopt)
 
 static bool is_setting2_available (const setting_detail_t *setting)
 {
-    return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].spindle_id != -1);
+    return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].ref_id != SPINDLE_NONE);
 }
 
 static bool spindle_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
@@ -153,14 +152,29 @@ static bool spindle_settings_iterator (const setting_detail_t *setting, setting_
     uint_fast16_t idx;
 
     for(idx = 0; idx < N_SPINDLE_SELECTABLE; idx++) {
-        if(idx == 0 || spindle_setting[idx].spindle_id != -1)
+        if(idx == 0 || spindle_setting[idx].ref_id != SPINDLE_NONE)
             callback(setting, idx, data);
     }
 
     return true;
 }
 
-#endif
+#endif // N_SYS_SPINDLE == 1
+
+static spindle_id_t get_spindle_id (uint8_t ref_id)
+{
+    spindle_id_t spindle_id = -1, idx;
+
+    if(ref_id != SPINDLE_NONE)
+      for(idx = 0; idx < N_SPINDLE; idx++) {
+        if(ref_id_map[idx] == ref_id) {
+            spindle_id = idx;
+            break;
+        }
+    }
+
+    return spindle_id;
+}
 
 static bool is_setting1_available (const setting_detail_t *setting)
 {
@@ -169,28 +183,26 @@ static bool is_setting1_available (const setting_detail_t *setting)
 
 static status_code_t set_spindle_type (setting_id_t id, uint_fast16_t int_value)
 {
-    spindle_id_t spindle_id = int_value == n_spindle ? -1 : int_value;
+    spindle_id_t spindle_id = int_value - 1;
 
     if(spindle_id >= 0) {
         if(spindle_get_count() < 2)
             return Status_SettingDisabled;
-        else if(int_value >= spindle_get_count())
+        else if(spindle_id >= spindle_get_count())
             return Status_SettingValueOutOfRange;
-        else if(spindle_id == settings.spindle.flags.type)
+        else if(spindle_id == default_spindle_id)
             return Status_InvalidStatement;
 // TODO: check for duplicate registration and/or allow multiple instantiations of spindles where possible...
     }
 
-    spindle_setting[id - Setting_SpindleEnable0].spindle_id = spindle_id;
+    spindle_setting[id - Setting_SpindleEnable0].ref_id = spindle_id == -1 ? SPINDLE_NONE : ref_id_map[spindle_id];
 
     return Status_OK;
 }
 
 static uint32_t get_int (setting_id_t id)
 {
-    uint32_t value = spindle_setting[id - Setting_SpindleEnable0].spindle_id;
-
-    return value == -1 ? n_spindle : value;
+    return get_spindle_id(spindle_setting[id - Setting_SpindleEnable0].ref_id) + 1;
 }
 
 static const setting_detail_t spindle_settings[] = {
@@ -251,26 +263,58 @@ static const setting_descr_t spindle_settings_descr[] = {
 #endif // N_SYS_SPINDLE
 };
 
+#endif // NO_SETTINGS_DESCRIPTIONS
+
 static void activate_spindles (void *data)
 {
     spindle_id_t idx;
     const setting_detail_t *spindles;
 
     if((spindles = setting_get_details(Setting_SpindleType, NULL)))
-        strcat(strcpy(format, spindles->format), ",Disabled");
+        strcat(strcpy(format, "Disabled,"), spindles->format);
+
+#if N_SPINDLE_SELECTABLE < 6 // Settings upgrade
+
+    // Update settings to store re_id instead of spindle_id in settings
+    // TODO: remove after next settings revision
+
+    if(!(spindle_setting[6].ref_id == (spindle_id_t)0xAB && spindle_setting[7].ref_id == (spindle_id_t)0xCD)) {
+#if N_SYS_SPINDLE > 1
+        for(idx = 0; idx < N_SYS_SPINDLE; idx++) {
+#else
+        for(idx = 0; idx < N_SPINDLE_SELECTABLE; idx++) {
+#endif
+            spindle_setting[idx].ref_id = spindle_setting[idx].ref_id < 0 ? SPINDLE_NONE : ref_id_map[spindle_setting[idx].ref_id];
+        }
+
+        spindle_setting[6].ref_id = 0xAB;
+        spindle_setting[7].ref_id = 0xCD;
+
+        hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
+    }
+
+#endif // Settings upgrade
 
 #if N_SYS_SPINDLE > 1
     for(idx = 1; idx < N_SYS_SPINDLE; idx++) {
 #else
     for(idx = 1; idx < N_SPINDLE_SETTINGS; idx++) {
 #endif
-        if(spindle_setting[idx].spindle_id >= spindle_get_count())
-            spindle_setting[idx].spindle_id = -1;
+        if(get_spindle_id(spindle_setting[idx].ref_id) == -1)
+            spindle_setting[idx].ref_id = SPINDLE_NONE;
 #if N_SYS_SPINDLE > 1
-        if(spindle_setting[idx].spindle_id != -1)
-            spindle_enable(spindle_setting[idx].spindle_id);
+        if(spindle_setting[idx].ref_id != SPINDLE_NONE)
+            spindle_enable(get_spindle_id(spindle_setting[idx].ref_id));
 #endif
     }
+
+#if N_SPINDLE_SELECTABLE < 6 // Settings upgrade
+
+    // TODO: remove after next settings revision
+    spindle_setting[6].ref_id = 0xAB;
+    spindle_setting[7].ref_id = 0xCD;
+
+#endif // Settings upgrade
 }
 
 // Write settings to non volatile storage (NVS).
@@ -284,7 +328,7 @@ static void spindle_settings_save (void)
 
     do {
         idx--;
-        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool_id > 0;
+        select_by_tool = spindle_setting[idx].ref_id != SPINDLE_NONE && spindle_setting[idx].min_tool_id > 0;
     } while(idx && !select_by_tool);
 
     if(select_by_tool) {
@@ -302,24 +346,32 @@ static void spindle_settings_save (void)
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
 }
 
-static void get_default_spindle (spindle_info_t *spindle, void *data)
+static bool validate_spindle (spindle_info_t *spindle, void *ref_id)
 {
-    if(spindle->ref_id == ((spindle_xx_t *)data)->ref_id)
-        spindle_setting[((spindle_xx_t *)data)->idx].spindle_id = spindle->id;
+    return spindle->ref_id == *((spindle_id_t *)ref_id);
 }
 
 // Restore default settings and write to non volatile storage (NVS).
 static void spindle_settings_restore (void)
 {
-    spindle_xx_t spd;
+    struct {
+        uint8_t idx;
+        uint8_t ref_id;
+    } spd;
 
     spd.idx = N_SPINDLE_SETTINGS;
 
+    memset(&spindle_setting, 0, sizeof(spindle_setting));
+    spindle_setting[6].ref_id = 0xAB;
+    spindle_setting[7].ref_id = 0xCD;
+
     do {
         spd.idx--;
-        spindle_setting[spd.idx].spindle_id = spd.idx == 0 ? 0 : -1;
         spd.ref_id = SPINDLE_NONE;
         switch(spd.idx) {
+            case 0:
+//                spd.ref_id = settings.spindle.flags.type;
+                break;
 #if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE2)
             case 1:
                 spd.ref_id = DEFAULT_SPINDLE2;
@@ -336,8 +388,8 @@ static void spindle_settings_restore (void)
                 break;
 #endif
         }
-        if(spd.ref_id != SPINDLE_NONE)
-            spindle_enumerate_spindles(get_default_spindle, &spd);
+        if(spd.ref_id != SPINDLE_NONE && spindle_enumerate_spindles(validate_spindle, &spd.ref_id))
+            spindle_setting[spd.idx].ref_id = spd.ref_id;
         spindle_setting[spd.idx].min_tool_id = 0;
     } while(spd.idx);
 
@@ -351,32 +403,30 @@ static void spindle_settings_load (void)
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&spindle_setting, nvs_address, sizeof(spindle_setting), true) != NVS_TransferResult_OK)
         spindle_settings_restore();
 
-    spindle_setting[0].spindle_id = settings.spindle.flags.type; // always default spindle!
-
 #if N_SYS_SPINDLE == 1
 
     uint_fast8_t idx, j = 1, k;
 
-    for(idx = 2; idx < N_SPINDLE_SETTINGS; idx++) {
+    for(idx = 2; idx < N_SPINDLE_SETTINGS - 2; idx++) {
         for(k = 0; k < idx; k++) {
-            if(k < j && spindle_setting[j].spindle_id == spindle_setting[k].spindle_id)
-                spindle_setting[j].spindle_id = -1;
-            if(spindle_setting[idx].spindle_id == spindle_setting[k].spindle_id)
-                spindle_setting[idx].spindle_id = -1;
+            if(k < j && spindle_setting[j].ref_id == spindle_setting[k].ref_id)
+                spindle_setting[j].ref_id = SPINDLE_NONE;
+            if(spindle_setting[idx].ref_id == spindle_setting[k].ref_id)
+                spindle_setting[idx].ref_id = SPINDLE_NONE;
         }
-        if(spindle_setting[j].spindle_id == -1 && spindle_setting[idx].spindle_id != -1) {
-            spindle_setting[j].spindle_id = spindle_setting[idx].spindle_id;
+        if(spindle_setting[j].ref_id == SPINDLE_NONE && spindle_setting[idx].ref_id != SPINDLE_NONE) {
+            spindle_setting[j].ref_id = spindle_setting[idx].ref_id;
             spindle_setting[j].min_tool_id = spindle_setting[idx].min_tool_id;
-            spindle_setting[idx].spindle_id = -1;
+            spindle_setting[idx].ref_id = SPINDLE_NONE;
         }
-        if(spindle_setting[idx].spindle_id == -1 && spindle_setting[j].spindle_id != -1)
+        if(spindle_setting[idx].ref_id == SPINDLE_NONE && spindle_setting[j].ref_id != SPINDLE_NONE)
             j = idx;
     }
 
     idx = N_SPINDLE_SELECTABLE;
     do {
         idx--;
-        select_by_tool = spindle_setting[idx].spindle_id != -1 && spindle_setting[idx].min_tool_id > 0;
+        select_by_tool = spindle_setting[idx].ref_id != SPINDLE_NONE && spindle_setting[idx].min_tool_id > 0;
     } while(idx && !select_by_tool);
 
     if(select_by_tool) {
@@ -399,70 +449,92 @@ static void spindle_settings_load (void)
     }
   #endif
 #endif // N_SYS_SPINDLE == 1
-
-    protocol_enqueue_foreground_task(activate_spindles, NULL);
 }
 
-static setting_details_t setting_details = {
-    .settings = spindle_settings,
-    .n_settings = sizeof(spindle_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = spindle_settings_descr,
-    .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .save = spindle_settings_save,
-    .load = spindle_settings_load,
-    .restore = spindle_settings_restore,
-#if N_SYS_SPINDLE == 1
-    .iterator = spindle_settings_iterator
-#endif
-};
+static bool map_spindles (spindle_info_t *spindle, void *data)
+{
+    ref_id_map[spindle->id] = spindle->ref_id;
+
+    return false;
+}
+
+static bool spindle_select_config (settings_t *settings)
+{
+    bool ok;
+
+    if((ok = driver_setup(settings))) {
+
+        default_spindle_id = setting_get_int_value(setting_get_details(Setting_SpindleType, NULL), 0);
+
+        spindle_enumerate_spindles(map_spindles, NULL);
+
+        spindle_setting[0].ref_id = ref_id_map[default_spindle_id]; // always default spindle!
+
+#if N_SYS_SPINDLE > 1
+
+        n_spindle = spindle_get_count();
+
+#else
+
+        if((n_spindle = spindle_get_count()) > 1) {
+
+            memcpy(&user_mcode, &grbl.user_mcode, sizeof(user_mcode_ptrs_t));
+
+            grbl.user_mcode.check = check;
+            grbl.user_mcode.validate = validate;
+            grbl.user_mcode.execute = execute;
+
+            on_report_options = grbl.on_report_options;
+            grbl.on_report_options = report_options;
+        }
 
 #endif
+    }
+
+    protocol_enqueue_foreground_task(activate_spindles, NULL);
+
+    return ok;
+}
 
 int8_t spindle_select_get_binding (spindle_id_t spindle_id)
 {
     uint_fast8_t idx = N_SPINDLE;
 
-    if(spindle_id == settings.spindle.flags.type)
+    if(spindle_id == default_spindle_id)
         return 0;
 
     if(spindle_id >= 0) do {
-        if(spindle_setting[--idx].spindle_id == spindle_id)
+        if(get_spindle_id(spindle_setting[--idx].ref_id) == spindle_id)
             return idx;
     } while(idx);
 
     return -1;
 }
 
-static void spindle_select_config (void *data)
-{
-#if N_SYS_SPINDLE > 1
-
-    n_spindle = spindle_get_count();
-
-#else
-
-    if((n_spindle = spindle_get_count()) > 1) {
-
-        memcpy(&user_mcode, &grbl.user_mcode, sizeof(user_mcode_ptrs_t));
-
-        grbl.user_mcode.check = check;
-        grbl.user_mcode.validate = validate;
-        grbl.user_mcode.execute = execute;
-
-        on_report_options = grbl.on_report_options;
-        grbl.on_report_options = report_options;
-    }
-
-#endif
-}
-
 void spindle_select_init (void)
 {
+    static setting_details_t setting_details = {
+        .settings = spindle_settings,
+        .n_settings = sizeof(spindle_settings) / sizeof(setting_detail_t),
+#ifndef NO_SETTINGS_DESCRIPTIONS
+        .descriptions = spindle_settings_descr,
+        .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
+#endif
+        .save = spindle_settings_save,
+        .load = spindle_settings_load,
+        .restore = spindle_settings_restore,
+#if N_SYS_SPINDLE == 1
+        .iterator = spindle_settings_iterator
+#endif
+    };
+
     if((nvs_address = nvs_alloc(sizeof(spindle_setting)))) {
+
         settings_register(&setting_details);
-        protocol_enqueue_foreground_task(spindle_select_config, NULL); // delay plugin config until all spindles are registered
+
+        // delay plugin config until all spindles are registered
+        driver_setup = hal.driver_setup;
+        hal.driver_setup = spindle_select_config;
     } else
         protocol_enqueue_foreground_task(report_warning, "Spindle select plugin failed to initialize!");
 }
