@@ -76,12 +76,12 @@ static status_code_t validate (parser_block_t *gc_block)
     if(gc_block->user_mcode == Spindle_Select) {
 
         if(gc_block->words.p) {
-            if(isnanf(gc_block->values.p))
+            if(isnan(gc_block->values.p))
                 state = Status_GcodeValueWordMissing;
             else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f && spindle_setting[(uint32_t)gc_block->values.p].ref_id != SPINDLE_NONE))
                 state = Status_GcodeValueOutOfRange;
         } else if(gc_block->words.q) {
-            if(isnanf(gc_block->values.q))
+            if(isnan(gc_block->values.q))
                 state = Status_GcodeValueWordMissing;
             else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q < (float)N_SPINDLE_SETTINGS && spindle_setting[(uint32_t)gc_block->values.q].ref_id != SPINDLE_NONE))
                 state = Status_GcodeValueOutOfRange;
