@@ -64,7 +64,7 @@ static void onSpindleStopped (void *data)
 {
     if(stopping) {
         stopping = running = false;
-        hal.stepper.enable(steppers_enabled, hold);
+        hal.stepper.enable(steppers_enabled, false);
         if(hal.stepper.claim_motor)
             hal.stepper.claim_motor(axis_idx, false);
     }
@@ -101,7 +101,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
         running = true;
         stopping = false;
-        hal.stepper.enable(steppers_enabled);
+        hal.stepper.enable(steppers_enabled, false);
         if(hal.stepper.claim_motor)
             hal.stepper.claim_motor(axis_idx, true);
         if(st2_motor_running(motor)) {
@@ -189,8 +189,8 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
 
         spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
 
-        spindle->rpm_min = settings->spindle.rpm_min;
-        spindle->rpm_max = settings->spindle.rpm_max;
+        spindle->rpm_min = settings->pwm_spindle.rpm_min;
+        spindle->rpm_max = settings->pwm_spindle.rpm_max;
         spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
         spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
     }

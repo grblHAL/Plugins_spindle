@@ -33,7 +33,7 @@
 
 static spindle_id_t spindle_id;
 static spindle_ptrs_t spindle1;
-static spindle1_settings_t *spindle_config;
+static spindle1_pwm_settings_t *spindle_config;
 static spindle_state_t spindle0_state = {0}, spindle1_state = {0};
 static spindle_pwm_t pwm_data;
 static on_spindle_selected_ptr on_spindle_selected;
@@ -82,7 +82,7 @@ static bool Spindle1Configure (spindle_ptrs_t *spindle)
 
     if(spindle0 && spindle0->context.pwm) {
         spindle->context.pwm = &pwm_data;
-        spindle_config->cfg.pwm_freq = settings.spindle.pwm_freq;
+        spindle_config->cfg.pwm_freq = settings.pwm_spindle.pwm_freq;
         spindle_precompute_pwm_values(spindle, &pwm_data, &spindle_config->cfg, spindle0->context.pwm->f_clock);
     }
 
@@ -99,10 +99,10 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         spindle->set_state = spindle0SetState;
         spindle->get_state = spindle0GetState;
         spindle->cap.direction = settings.mode == Mode_Laser;
-        spindle->context.pwm->cloned = On;
+        spindle->context.pwm->flags.cloned = On;
         if(spindle->context.pwm) {
             spindle1.context.pwm = &pwm_data;
-            spindle_config->cfg.pwm_freq = settings.spindle.pwm_freq;
+            spindle_config->cfg.pwm_freq = settings.pwm_spindle.pwm_freq;
             spindle_precompute_pwm_values(&spindle1, &pwm_data, &spindle_config->cfg, spindle->context.pwm->f_clock);
         } else
             spindle1.context.pwm = NULL;
@@ -115,7 +115,7 @@ static void warn_disabled (sys_state_t state)
 }
 */
 
-static void spindle_settings_changed (spindle1_settings_t *settings)
+static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
 {
     if(spindle1.context.pwm)
         Spindle1Configure(&spindle1);

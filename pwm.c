@@ -33,7 +33,7 @@
 static uint8_t port_pwm = 0, port_on = 0, port_dir = 255;
 static xbar_t pwm_port;
 static spindle_id_t spindle_id = -1;
-static spindle1_settings_t *spindle_config;
+static spindle1_pwm_settings_t *spindle_config;
 static spindle_state_t spindle_state = {0};
 
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
@@ -133,7 +133,7 @@ static void pwm_spindle_register (void)
         protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
 }
 
-static void spindle_settings_changed (spindle1_settings_t *settings)
+static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
 {
     static bool init_ok = false;
 

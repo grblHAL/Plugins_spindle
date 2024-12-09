@@ -5,8 +5,6 @@
   Part of grblHAL
 
   Copyright (c) 2020-2024 Terje Io
-  except modbus_CRC16x which is Copyright (c) 2006 Christian Walter <wolti@sil.at>
-  Lifted from his FreeModbus Libary
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -36,11 +34,13 @@
 #ifdef ARDUINO
 #include "../grbl/protocol.h"
 #include "../grbl/settings.h"
+#include "../grbl/crc.h"
 #include "../grbl/nvs_buffer.h"
 #include "../grbl/state_machine.h"
 #else
 #include "grbl/protocol.h"
 #include "grbl/settings.h"
+#include "grbl/crc.h"
 #include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
 #endif
@@ -102,30 +102,10 @@ static uint32_t modbus_get_baud (setting_id_t setting);
 static void modbus_settings_restore (void);
 static void modbus_settings_load (void);
 
-// Compute the MODBUS RTU CRC
-static uint16_t modbus_CRC16x (const char *buf, uint_fast16_t len)
-{
-    uint16_t crc = 0xFFFF;
-    uint_fast8_t pos, i;
-
-    for (pos = 0; pos < len; pos++) {
-        crc ^= (uint16_t)buf[pos];          // XOR byte into least sig. byte of crc
-        for (i = 8; i != 0; i--) {          // Loop over each bit
-            if ((crc & 0x0001) != 0) {      // If the LSB is set
-                crc >>= 1;                  // Shift right and XOR 0xA001
-                crc ^= 0xA001;
-            } else                          // Else LSB is not set
-                crc >>= 1;                  // Just shift right
-        }
-    }
-
-    // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
-    return crc;
-}
 /*
 static bool valid_crc (const char *buf, uint_fast16_t len)
 {
-    uint16_t crc = modbus_CRC16x(buf, len - 2);
+    uint16_t crc = modbus_crc16x(buf, len - 2);
 
     return buf[len - 1] == (crc >> 8) && buf[len - 2] == (crc & 0xFF);
 }
@@ -166,7 +146,7 @@ static void modbus_poll (void *data)
 
                 packet->sent = true;
                 stream.flush_rx_buffer();
-                stream.write(((queue_entry_t *)packet)->msg.adu, ((queue_entry_t *)packet)->msg.tx_length);
+                stream.write((char *)((queue_entry_t *)packet)->msg.adu, ((queue_entry_t *)packet)->msg.tx_length);
             }
             break;
 
@@ -211,7 +191,7 @@ static void modbus_poll (void *data)
 
             if(stream.get_rx_buffer_count() >= packet->msg.rx_length) {
 
-                char *buf = ((queue_entry_t *)packet)->msg.adu;
+                char *buf = (char *)((queue_entry_t *)packet)->msg.adu;
                 uint16_t rx_len = packet->msg.rx_length; // store original length for CRC check
 
                 do {
@@ -219,7 +199,7 @@ static void modbus_poll (void *data)
                 } while(--packet->msg.rx_length);
 
                 if(packet->msg.crc_check) {
-                    uint_fast16_t crc = modbus_CRC16x(((queue_entry_t *)packet)->msg.adu, rx_len - 2);
+                    uint_fast16_t crc = modbus_crc16x(((queue_entry_t *)packet)->msg.adu, rx_len - 2);
 
                     if(packet->msg.adu[rx_len - 2] != (crc & 0xFF) || packet->msg.adu[rx_len - 1] != (crc >> 8)) {
                         // CRC check error
@@ -268,7 +248,7 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
         return false;
     }
 
-    uint_fast16_t crc = modbus_CRC16x(msg->adu, msg->tx_length - 2);
+    uint_fast16_t crc = modbus_crc16x(msg->adu, msg->tx_length - 2);
 
     msg->adu[msg->tx_length - 1] = crc >> 8;
     msg->adu[msg->tx_length - 2] = crc & 0xFF;
@@ -293,7 +273,7 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
 
         sync_msg.async = false;
         stream.flush_rx_buffer();
-        stream.write(sync_msg.msg.adu, sync_msg.msg.tx_length);
+        stream.write((char *)sync_msg.msg.adu, sync_msg.msg.tx_length);
 
         packet = &sync_msg;
 

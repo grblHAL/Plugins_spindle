@@ -49,7 +49,7 @@ static const modbus_callbacks_t callbacks = {
 };
 
 // Read min and max configured frequency from spindle
-static void spindleGetRPMLimits (void)
+static void spindleGetRPMLimits (void *data)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMinRPM,
@@ -215,7 +215,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        spindleGetRPMLimits();
+        task_add_delayed(spindleGetRPMLimits, NULL, 200);
 }
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
@@ -233,7 +233,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         modbus_set_silence(NULL);
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetRPMLimits();
+        spindleGetRPMLimits(NULL);
 
     } else
         spindle_hal = NULL;
