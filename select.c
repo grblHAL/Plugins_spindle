@@ -273,28 +273,6 @@ static void activate_spindles (void *data)
     if((spindles = setting_get_details(Setting_SpindleType, NULL)))
         strcat(strcpy(format, "Disabled,"), spindles->format);
 
-#if N_SPINDLE_SELECTABLE < 6 // Settings upgrade
-
-    // Update settings to store re_id instead of spindle_id in settings
-    // TODO: remove after next settings revision
-
-    if(!(spindle_setting[6].ref_id == (spindle_id_t)0xAB && spindle_setting[7].ref_id == (spindle_id_t)0xCD)) {
-#if N_SYS_SPINDLE > 1
-        for(idx = 0; idx < N_SYS_SPINDLE; idx++) {
-#else
-        for(idx = 0; idx < N_SPINDLE_SELECTABLE; idx++) {
-#endif
-            spindle_setting[idx].ref_id = spindle_setting[idx].ref_id < 0 ? SPINDLE_NONE : ref_id_map[spindle_setting[idx].ref_id];
-        }
-
-        spindle_setting[6].ref_id = 0xAB;
-        spindle_setting[7].ref_id = 0xCD;
-
-        hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_setting, sizeof(spindle_setting), true);
-    }
-
-#endif // Settings upgrade
-
 #if N_SYS_SPINDLE > 1
     for(idx = 1; idx < N_SYS_SPINDLE; idx++) {
 #else
@@ -307,14 +285,6 @@ static void activate_spindles (void *data)
             spindle_enable(get_spindle_id(spindle_setting[idx].ref_id));
 #endif
     }
-
-#if N_SPINDLE_SELECTABLE < 6 // Settings upgrade
-
-    // TODO: remove after next settings revision
-    spindle_setting[6].ref_id = 0xAB;
-    spindle_setting[7].ref_id = 0xCD;
-
-#endif // Settings upgrade
 }
 
 // Write settings to non volatile storage (NVS).

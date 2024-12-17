@@ -25,7 +25,7 @@
 
 #include "shared.h"
 
-#if SPINDLE_ENABLE & (1<<SPINDLE_PWM2)
+#if SPINDLE_ENABLE & ((1<<SPINDLE_PWM2)|(1<<SPINDLE_PWM2_NODIR))
 
 #include "grbl/protocol.h"
 #include "grbl/nvs_buffer.h"
@@ -110,23 +110,25 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
     return true;
 }
 
+static const spindle_ptrs_t spindle = {
+    .type = SpindleType_PWM,
+    .ref_id = SPINDLE_PWM2,
+    .cap = {
+#if !(SPINDLE_ENABLE & 1<<SPINDLE_PWM2_NODIR)
+        .direction = On,
+#endif
+        .variable = On,
+//          .pwm_invert = On,
+        .gpio_controlled = On
+    },
+    .config = spindleConfig,
+    .update_rpm = spindleSetSpeed,
+    .set_state = spindleSetStateVariable,
+    .get_state = spindleGetState
+};
+
 static void pwm_spindle_register (void)
 {
-    static const spindle_ptrs_t spindle = {
-        .type = SpindleType_PWM,
-        .ref_id = SPINDLE_PWM2,
-        .cap = {
-            .direction = On,
-            .variable = On,
-//          .pwm_invert = On,
-            .gpio_controlled = On
-        },
-        .config = spindleConfig,
-        .update_rpm = spindleSetSpeed,
-        .set_state = spindleSetStateVariable,
-        .get_state = spindleGetState
-    };
-
     if((spindle_id = spindle_register(&spindle, "PWM2")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
@@ -153,7 +155,9 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
 
             if((ok = pwm_port.cap.pwm && ioport_claim(Port_Analog, Port_Output, &port_pwm, "Spindle PWM"))) {
                 ok = ioport_claim(Port_Digital, Port_Output, &port_on, "PWM spindle on");
+#if !(SPINDLE_ENABLE & 1<<SPINDLE_PWM2_NODIR)
                 ok = ok && (port_dir == 255 || ioport_claim(Port_Digital, Port_Output, &port_dir, "PWM spindle dir"));
+#endif
             }
         }
 
@@ -169,7 +173,7 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
 void pwm_spindle_init (void)
 {
     if((spindle_config = spindle1_settings_add(true)))
-        spindle1_settings_register((spindle_cap_t){ .variable = On }, spindle_settings_changed);
+        spindle1_settings_register(spindle.cap, spindle_settings_changed);
     else
         protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
 }
