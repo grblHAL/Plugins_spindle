@@ -56,6 +56,8 @@ static const modbus_silence_timeout_t silence =
 };
 
 static const modbus_callbacks_t callbacks = {
+    .retries = VFD_RETRIES,
+    .retry_delay = VFD_RETRY_DELAY,
     .on_rx_packet = rx_packet,
     .on_rx_exception = rx_exception
 };
@@ -113,8 +115,13 @@ static void spindleGetMaxAmps (void)
     modbus_send(&cmd, &callbacks, true);
 }
 
-static void spindleSetRPM (float rpm, bool block)
+static void set_rpm (float rpm, bool block)
 {
+    static uint8_t busy = 0;
+
+    if(busy && !block)
+        return;
+
     if(rpm != spindle_data.rpm_programmed) {
 
         uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_at_50Hz); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
@@ -131,9 +138,10 @@ static void spindleSetRPM (float rpm, bool block)
             .rx_length = 6
         };
 
+        busy++;
         modbus_send(&rpm_cmd, &callbacks, block);
-
         spindle_set_at_speed_range(spindle_hal, &spindle_data, rpm);
+        busy--;
     }
 }
 
@@ -141,13 +149,18 @@ static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
     UNUSED(spindle);
 
-    spindleSetRPM(rpm, false);
+    set_rpm(rpm, false);
 }
 
 // Start or stop spindle
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
     UNUSED(spindle);
+
+    static bool busy = false;
+
+    if(busy)
+        return;
 
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
@@ -160,6 +173,8 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         .rx_length = 6
     };
 
+    busy = true;
+
     if(vfd_state.ccw != state.ccw)
         spindle_data.rpm_programmed = -1.0f;
 
@@ -167,7 +182,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
-        spindleSetRPM(rpm, true);
+        set_rpm(rpm, true);
+
+    busy = false;
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -261,8 +278,6 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
-    // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
     vfd_failed(false);
 }
 
@@ -271,7 +286,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.12");
+        report_plugin("HUANYANG VFD", "0.14");
 }
 
 static void onDriverReset (void)

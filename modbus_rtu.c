@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2024 Terje Io
+  Copyright (c) 2020-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -63,7 +63,6 @@
 
 typedef struct queue_entry {
     bool async;
-    bool sent;
     modbus_message_t msg;
     modbus_callbacks_t callbacks;
     struct queue_entry *next;
@@ -97,11 +96,6 @@ static driver_reset_ptr driver_reset;
 static on_report_options_ptr on_report_options;
 static nvs_address_t nvs_address;
 
-static status_code_t modbus_set_baud (setting_id_t id, uint_fast16_t value);
-static uint32_t modbus_get_baud (setting_id_t setting);
-static void modbus_settings_restore (void);
-static void modbus_settings_load (void);
-
 /*
 static bool valid_crc (const char *buf, uint_fast16_t len)
 {
@@ -111,16 +105,40 @@ static bool valid_crc (const char *buf, uint_fast16_t len)
 }
 */
 
-static inline void add_message (queue_entry_t *packet, modbus_message_t *msg, const modbus_callbacks_t *callbacks)
+static void retry_exception (uint8_t code, void *context)
 {
-    packet->sent = false;
+    if(packet && packet->callbacks.retries) {
+        state = ModBus_Retry;
+        silence_until = hal.get_elapsed_ticks() + silence_timeout + packet->callbacks.retry_delay;
+    }
+}
+
+static inline queue_entry_t *add_message (queue_entry_t *packet, modbus_message_t *msg, const modbus_callbacks_t *callbacks)
+{
     memcpy(&packet->msg, msg, sizeof(modbus_message_t));
-    if(callbacks)
+    if(callbacks) {
         memcpy(&packet->callbacks, callbacks, sizeof(modbus_callbacks_t));
-    else {
+        if(!packet->async && packet->callbacks.retries)
+            packet->callbacks.on_rx_exception = retry_exception;
+    } else {
+        packet->callbacks.retries = 0;
         packet->callbacks.on_rx_packet = NULL;
         packet->callbacks.on_rx_exception = NULL;
     }
+
+    return packet;
+}
+
+static void tx_message (volatile queue_entry_t *msg)
+{
+    if(stream.set_direction)
+        stream.set_direction(true);
+
+    state = ModBus_TX;
+    rx_timeout = modbus.rx_timeout;
+
+    stream.flush_rx_buffer();
+    stream.write((char *)((queue_entry_t *)msg)->msg.adu, ((queue_entry_t *)msg)->msg.tx_length);
 }
 
 // called once every ms
@@ -135,23 +153,14 @@ static void modbus_poll (void *data)
 
         case ModBus_Idle:
             if(tail != head && !packet) {
-
                 packet = tail;
                 tail = tail->next;
-                state = ModBus_TX;
-                rx_timeout = modbus.rx_timeout;
-
-                if(stream.set_direction)
-                    stream.set_direction(true);
-
-                packet->sent = true;
-                stream.flush_rx_buffer();
-                stream.write((char *)((queue_entry_t *)packet)->msg.adu, ((queue_entry_t *)packet)->msg.tx_length);
+                tx_message(packet);
             }
             break;
 
         case ModBus_Silent:
-            if(hal.get_elapsed_ticks() >= silence_until) {
+            if((int32_t)(silence_until - hal.get_elapsed_ticks()) <= 0) {
                 silence_until = 0;
                 state = ModBus_Idle;
             }
@@ -240,6 +249,7 @@ static void modbus_poll (void *data)
 
 bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks, bool block)
 {
+    static bool poll = false;
     static queue_entry_t sync_msg = {0};
 
     if(msg->tx_length > MODBUS_MAX_ADU_SIZE || msg->rx_length > MODBUS_MAX_ADU_SIZE) {
@@ -257,25 +267,18 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
 
     if(block) {
 
-        bool poll = true;
+        if(poll)
+            return false;
+
+        poll = true;
 
         do {
             grbl.on_execute_realtime(state_get());
         } while(state != ModBus_Idle);
 
-        if(stream.set_direction)
-            stream.set_direction(true);
-
-        state = ModBus_TX;
-        rx_timeout = modbus.rx_timeout;
-
-        add_message(&sync_msg, msg, callbacks);
-
-        sync_msg.async = false;
-        stream.flush_rx_buffer();
-        stream.write((char *)sync_msg.msg.adu, sync_msg.msg.tx_length);
-
-        packet = &sync_msg;
+        packet = add_message(&sync_msg, msg, callbacks);
+        packet->async = false;
+        tx_message(packet);
 
         while(poll) {
 
@@ -286,13 +289,13 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
                 case ModBus_Timeout:
                     if(packet->callbacks.on_rx_exception)
                         packet->callbacks.on_rx_exception(0, packet->msg.context);
-                    poll = false;
+                    poll = packet->callbacks.retries > 0;
                     break;
 
                 case ModBus_Exception:
                     if(packet->callbacks.on_rx_exception)
                         packet->callbacks.on_rx_exception(exception_code == -1 ? 0 : (uint8_t)(exception_code & 0xFF), packet->msg.context);
-                    poll = false;
+                    poll = packet->callbacks.retries > 0;
                     break;
 
                 case ModBus_GotReply:
@@ -301,11 +304,22 @@ bool modbus_send_rtu (modbus_message_t *msg, const modbus_callbacks_t *callbacks
                     poll = block = false;
                     break;
 
+                case ModBus_Retry:
+                    if((int32_t)(silence_until - hal.get_elapsed_ticks()) <= 0) {
+                        silence_until = 0;
+                        if(--packet->callbacks.retries == 0)
+                            packet->callbacks.on_rx_exception = callbacks->on_rx_exception;
+                        packet = add_message(&sync_msg, msg, (const modbus_callbacks_t *)&packet->callbacks);
+                        tx_message(packet);
+                    }
+                    break;
+
                 default:
                     break;
             }
         }
-    
+
+        poll = false;
         packet = NULL;
         state = silence_until > 0 ? ModBus_Silent : ModBus_Idle;
 
@@ -326,19 +340,24 @@ static void modbus_reset (void)
 
     if(sys.abort) {
 
-        packet = NULL;
-        tail = head;
+        if(packet) {
+            packet = NULL;
+            packet->callbacks.retries = 0;
+            packet->callbacks.on_rx_exception = NULL;
+        }
 
-        silence_until = 0;
-        state = ModBus_Idle;
+        tail = head;
+        silence_until = hal.get_elapsed_ticks() + 500;
+        state = ModBus_Silent;
 
         stream.flush_tx_buffer();
         stream.flush_rx_buffer();
-
     }
 
-    while(state != ModBus_Idle)
-        modbus_poll(NULL);
+    if(state == ModBus_Retry) {
+        silence_until = hal.get_elapsed_ticks() + 500;
+        state = ModBus_Silent;
+    }
 
     driver_reset();
 }
@@ -359,26 +378,6 @@ static const setting_group_detail_t modbus_groups [] = {
     { Group_Root, Group_ModBus, "ModBus"}
 };
 
-static const setting_detail_t modbus_settings[] = {
-    { Settings_ModBus_BaudRate, Group_ModBus, "ModBus baud rate", NULL, Format_RadioButtons, "2400,4800,9600,19200,38400,115200", NULL, NULL, Setting_NonCoreFn, modbus_set_baud, modbus_get_baud, NULL },
-    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL }
-};
-
-static void modbus_settings_save (void)
-{
-    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&modbus, sizeof(modbus_settings_t), true);
-}
-
-static setting_details_t setting_details = {
-    .groups = modbus_groups,
-    .n_groups = sizeof(modbus_groups) / sizeof(setting_group_detail_t),
-    .settings = modbus_settings,
-    .n_settings = sizeof(modbus_settings) / sizeof(setting_detail_t),
-    .save = modbus_settings_save,
-    .load = modbus_settings_load,
-    .restore = modbus_settings_restore
-};
-
 static status_code_t modbus_set_baud (setting_id_t id, uint_fast16_t value)
 {
     modbus.baud_rate = baud[(uint32_t)value];
@@ -393,6 +392,16 @@ static uint32_t modbus_get_baud (setting_id_t setting)
     return get_baudrate(modbus.baud_rate);
 }
 
+static const setting_detail_t modbus_settings[] = {
+    { Settings_ModBus_BaudRate, Group_ModBus, "ModBus baud rate", NULL, Format_RadioButtons, "2400,4800,9600,19200,38400,115200", NULL, NULL, Setting_NonCoreFn, modbus_set_baud, modbus_get_baud, NULL },
+    { Settings_ModBus_RXTimeout, Group_ModBus, "ModBus RX timeout", "milliseconds", Format_Integer, "####0", "50", "250", Setting_NonCore, &modbus.rx_timeout, NULL, NULL }
+};
+
+static void modbus_settings_save (void)
+{
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&modbus, sizeof(modbus_settings_t), true);
+}
+
 static void modbus_settings_restore (void)
 {
     modbus.rx_timeout = 50;
@@ -403,7 +412,8 @@ static void modbus_settings_restore (void)
 
 static void modbus_settings_load (void)
 {
-    if(hal.nvs.memcpy_from_nvs((uint8_t *)&modbus, nvs_address, sizeof(modbus_settings_t), true) != NVS_TransferResult_OK)
+    if(hal.nvs.memcpy_from_nvs((uint8_t *)&modbus, nvs_address, sizeof(modbus_settings_t), true) != NVS_TransferResult_OK ||
+         modbus.baud_rate != baud[get_baudrate(modbus.baud_rate)])
         modbus_settings_restore();
 
     is_up = true;
@@ -417,7 +427,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:MODBUS v0.16]" ASCII_EOL);
+        report_plugin("MODBUS", "0.18");
 }
 
 static bool modbus_rtu_isup (void)
@@ -498,12 +508,22 @@ static bool claim_stream (io_stream_properties_t const *sstream)
 
 void modbus_rtu_init (void)
 {
-    const modbus_api_t api = {
+    static const modbus_api_t api = {
         .interface = Modbus_InterfaceRTU,
         .is_up = modbus_rtu_isup,
         .flush_queue = modbus_rtu_flush_queue,
         .set_silence = modbus_rtu_set_silence,
         .send = modbus_send_rtu
+    };
+
+    static setting_details_t setting_details = {
+        .groups = modbus_groups,
+        .n_groups = sizeof(modbus_groups) / sizeof(setting_group_detail_t),
+        .settings = modbus_settings,
+        .n_settings = sizeof(modbus_settings) / sizeof(setting_detail_t),
+        .save = modbus_settings_save,
+        .load = modbus_settings_load,
+        .restore = modbus_settings_restore
     };
 
 #if MODBUS_ENABLE & MODBUS_RTU_DIR_ENABLED

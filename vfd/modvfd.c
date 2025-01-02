@@ -33,7 +33,6 @@
 
 #include "spindle.h"
 
-static uint16_t retry_counter = 0;
 static uint32_t modbus_address;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal;
@@ -42,32 +41,31 @@ static spindle_data_t spindle_data = {0};
 static on_spindle_selected_ptr on_spindle_selected;
 static on_report_options_ptr on_report_options;
 static settings_changed_ptr settings_changed;
-static driver_reset_ptr driver_reset;
 
 static void rx_packet (modbus_message_t *msg);
 static void rx_exception (uint8_t code, void *context);
 
 static const modbus_callbacks_t callbacks = {
+    .retries = VFD_RETRIES,
+    .retry_delay = VFD_RETRY_DELAY,
     .on_rx_packet = rx_packet,
     .on_rx_exception = rx_exception
 };
 
 // TODO: there should be a mechanism to read max RPM from the VFD in order to configure RPM/Hz instead of above define.
 
-
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
     return modbus_isup();
 }
 
-static void spindleSetRPM (float rpm, bool block)
+static void set_rpm (float rpm, bool block)
 {
-    static uint_fast8_t retries = 0;
+    static uint8_t busy = 0;
 
-    if(retries)
-        return; // block reentry
+    if(busy && !block)
+        return;
 
-    bool ok;
     uint16_t data = ((uint32_t)(rpm)) / vfd_config.in_divider * vfd_config.in_multiplier;
 
     modbus_message_t rpm_cmd = {
@@ -83,38 +81,30 @@ static void spindleSetRPM (float rpm, bool block)
         .rx_length = 8
     };
 
-    do {
-        if(!(ok = modbus_send(&rpm_cmd, &callbacks, block)))
-            retries++;
-    } while(!ok && block && retries <= VFD_RETRIES);
-
-    if(!ok)
-        vfd_failed(false);
-
+    busy++;
+    modbus_send(&rpm_cmd, &callbacks, block);
     spindle_set_at_speed_range(spindle_hal, &spindle_data, rpm);
-
-    retries = 0;
+    busy--;
 }
 
 static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
     UNUSED(spindle);
 
-    spindleSetRPM(rpm, false);
+    set_rpm(rpm, false);
 }
 
 // Start or stop spindle
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
-    static uint_fast8_t retries = 0;
-
-    bool ok;
-    uint16_t runstop;
-
     UNUSED(spindle);
 
-    if(retries)
-        return; // block reentry
+    static bool busy = false;
+
+    if(busy)
+        return;
+
+    uint16_t runstop;
 
     if(!state.on || rpm == 0.0f)
         runstop = vfd_config.stop_cmd;
@@ -134,23 +124,18 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         .rx_length = 8
     };
 
+    busy = true;
+
     if(vfd_state.ccw != state.ccw)
         spindle_data.rpm_programmed = -1.0f;
 
     vfd_state.on = spindle_data.state_programmed.on = state.on;
     vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
-    do {
-        if(!(ok = modbus_send(&mode_cmd, &callbacks, true)))
-            retries++;
-    } while(!ok && retries <= VFD_RETRIES);
+    if(modbus_send(&mode_cmd, &callbacks, true))
+        set_rpm(rpm, true);
 
-    if(ok)
-        spindleSetRPM(rpm, true);
-    else
-        vfd_failed(false);
-
-    retries = 0;
+    busy = false;
 }
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
@@ -161,9 +146,6 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
-    static uint32_t last_ms;
-    uint32_t ms = hal.get_elapsed_ticks();
-
     UNUSED(spindle);
 
     modbus_message_t mode_cmd = {
@@ -179,10 +161,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
         .rx_length = 7
     };
 
-    if(ms > (last_ms + VFD_RETRY_DELAY)){ //don't spam the port
-        modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
-        last_ms = ms;
-    }
+    modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
     vfd_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
 
@@ -198,13 +177,10 @@ static void rx_packet (modbus_message_t *msg)
 {
     if(!(msg->adu[0] & 0x80)) {
 
-        retry_counter = 0;
-
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
                 spindle_validate_at_speed(spindle_data, f2rpm((msg->adu[3] << 8) | msg->adu[4]));
-                retry_counter = 0;
                 break;
 
 //            case VFD_GetMaxRPM:
@@ -220,40 +196,7 @@ static void rx_packet (modbus_message_t *msg)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
-    // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
-    if(sys.cold_start)
-        vfd_failed(false);
-    else if ((vfd_response_t)context > 0) {
-
-        // when RX exceptions during one of the VFD messages, need to retry.
-
-        switch((vfd_response_t)context) {
-
-            case VFD_SetRPM:
-//              modbus_reset();
-                retry_counter++;
-                spindleSetRPM(max(spindle_data.rpm_programmed, 0.0f), false);
-                break;
-
-            case VFD_GetRPM:
-//              modbus_reset();
-//              spindleGetState(); no need to retry?
-                break;
-
-            default:
-                break;
-        }
-
-        if (retry_counter >= VFD_RETRIES) {
-            system_raise_alarm(Alarm_Spindle);
-            retry_counter = 0;
-        }
-
-    } else {
-        retry_counter = 0;
-        system_raise_alarm(Alarm_Spindle);
-    }
+    vfd_failed(false);
 }
 
 static void onReportOptions (bool newopt)
@@ -261,14 +204,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("MODVFD", "0.04");
-}
-
-static void onDriverReset (void)
-{
-    retry_counter = 0;
-
-    driver_reset();
+        report_plugin("MODVFD", "0.05");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -333,9 +269,6 @@ void vfd_modvfd_init (void)
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
-
-        driver_reset = hal.driver_reset;
-        hal.driver_reset = onDriverReset;
     }
 }
 

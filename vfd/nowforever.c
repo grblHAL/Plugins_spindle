@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2024 Terje Io
+  Copyright (c) 2023-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -41,11 +41,14 @@ static spindle_state_t vfd_state = {0};
 static on_report_options_ptr on_report_options;
 static on_spindle_selected_ptr on_spindle_selected;
 static settings_changed_ptr settings_changed;
+static driver_reset_ptr driver_reset;
 
 static void rx_packet (modbus_message_t *msg);
 static void rx_exception (uint8_t code, void *context);
 
 static const modbus_callbacks_t callbacks = {
+    .retries = VFD_RETRIES,
+    .retry_delay = VFD_RETRY_DELAY,
     .on_rx_packet = rx_packet,
     .on_rx_exception = rx_exception
 };
@@ -74,8 +77,13 @@ static void spindleGetRPMRange (void)
     modbus_send(&cmd, &callbacks, true);
 }
 
-static void spindleSetRPM (float rpm, bool block)
+static void set_rpm (float rpm, bool block)
 {
+    static uint8_t busy = 0;
+
+    if(busy && !block)
+        return;
+
     if(rpm != spindle_data.rpm_programmed ) {
 
         uint16_t freq = (uint16_t)(rpm * 1.667f); // * 100.0f / 60.0f
@@ -98,20 +106,30 @@ static void spindleSetRPM (float rpm, bool block)
             .rx_length = 8
         };
 
+        busy++;
         modbus_send(&rpm_cmd, &callbacks, block);
-
         spindle_set_at_speed_range(spindle_hal, &spindle_data, rpm);
+        busy--;
     }
 }
 
 static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
-    spindleSetRPM(rpm, false);
+    UNUSED(spindle);
+
+    set_rpm(rpm, false);
 }
 
 // Start or stop spindle
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
+    UNUSED(spindle);
+
+    static bool busy = false;
+
+    if(busy)
+        return;
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
@@ -128,6 +146,8 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         .rx_length = 8
     };
 
+    busy = true;
+
     if(vfd_state.ccw != state.ccw)
         spindle_data.rpm_programmed = 0.0f;
 
@@ -135,7 +155,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     vfd_state.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
-        spindleSetRPM(rpm, true);
+        set_rpm(rpm, true);
+
+    busy = false;
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -198,19 +220,9 @@ static void rx_packet (modbus_message_t *msg)
     }
 }
 
-static void raise_alarm (void *data)
-{
-    system_raise_alarm(Alarm_Spindle);
-}
-
 static void rx_exception (uint8_t code, void *context)
 {
-    // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
-    // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
-    if(sys.cold_start)
-        protocol_enqueue_foreground_task(raise_alarm, NULL);
-    else
-        system_raise_alarm(Alarm_Spindle);
+    vfd_failed(false);
 }
 
 static void onReportOptions (bool newopt)
@@ -219,6 +231,14 @@ static void onReportOptions (bool newopt)
 
     if(!newopt)
         report_plugin("Nowforever VFD", "0.02");
+}
+
+static void onDriverReset (void)
+{
+    driver_reset();
+
+    if(spindle_hal)
+        spindleGetRPMRange();
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -283,6 +303,9 @@ void vfd_nowforever_init (void)
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
+
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = onDriverReset;
     }
 }
 
