@@ -39,9 +39,28 @@ the [VFDMOD](https://github.com/aekhv/vfdmod)component from LinuxCNC. The follow
 `$470` - RPM value multiplier for reading RPM, default value is `60`.  
 `$471` - RPM value divider for reading RPM, default value is `100`.  
 
-__NOTE:__ settings for ModBus addresses requires a hard reset after changing spindle binding settings \(see below\) before becoming available.
+> [!NOTE]
+> Settings for ModBus addresses requires a hard reset after changing spindle binding settings \(see below\) before becoming available.
 
-___
+#### Stepper spindle
+
+*** Experimental, not tested in a machine ***
+
+The stepper spindle binds to/claims the highest numbered axis > the Z-axis currently _without_ hiding it from control by motion G-codes. 
+Setting units for the bound axis are changed to _step/rev_, _rev/min_ and _rev/sec^2_, note that some senders may show these in the settings UI, some may not.
+
+Settings `$30` \(min. spindle speed\) and `$31` \(max. spindle speed) is used to set the RPM range, but be aware that `$31` will be capped by the max. rate set for the axis.
+
+Since steps are used to control the motor the angular position can be calculated from the step count, thus this spindle can be used for spindle synced motion without adding an encoder.
+"at speed" fucntionality is also available. 
+
+> [!NOTE]
+> Keep settings within stepper motor specifications, avoid using high microstepping settings. Using a closed loop stepper may be advantageous.
+
+> [!NOTE]
+> Some drivers use interrupts to generate steps, some use polling. If polling is used step generation might be jittery, especially at higher RPMs.
+
+---
 
 ### Additional spindles
 
@@ -65,7 +84,9 @@ Use `M104Q<n>` where `<n>` is the _spindle number_ to set as the active spindle.
 The spindle to control is adressed by the `$` gcode word followed by the spindle number,
 available for the `S`, `M3`, `M4`, `M5`, `M51`, `G33`, `G76`, `G96` and `G97` gcode commands.  
 Spindle switching by tool number or `M104` is not available in this mode.  
-__NOTE:__ This mode is work in progress and functionality is not yet complete!
+
+> [!NOTE]
+> This mode is work in progress and functionality is not yet complete!
 
 The spindles are dynamically assigned a _spindle id_ at registration, starting from 0. $-settings are then used to tell grblHAL which are to be enabled,
 by _spindle number_.
@@ -77,7 +98,8 @@ by _spindle number_.
 
 Available spindles with _spindle id_, and _spindle number_ if bound, can be listed by the `$spindles` command. `$$=<n>` where `<n>` is a setting number above can be used for listing allowed values.
 
-__NOTES:__ `$395` defaults to _spindle id_ 0, this is normally the driver provided PWM spindle but can be another spindle if only one spindle can be registered. Spindle 0 cannot be disabled.
+> [!NOTE]
+> `$395` defaults to _spindle id_ 0, this is normally the driver provided PWM spindle but can be another spindle if only one spindle can be registered. Spindle 0 cannot be disabled.
 
 If the grblHAL is configured to handle only one active spindle at a time then $-settings can be used to assign a range of tool numbers to
 each spindle number. The spindle is then activated on a `M6T<n>` command where `<n>` is the tool number.
@@ -89,15 +111,19 @@ each spindle number. The spindle is then activated on a `M6T<n>` command where `
 
 Tool number vs. spindle is checked from the highest to the lowest spindle number, if all are set to 0 no spindle change takes place.
 
-__NOTE:__ settings for tool number assignments requires a hard reset after changing spindle enable settings before becoming available.  
-__NOTE:__ when switching between spindles any offset between the spindles must be handled by gcode commands, typically by applying an offset and moving
+> [!NOTE]
+> settings for tool number assignments requires a hard reset after changing spindle enable settings before becoming available.  
+
+> [!NOTE]
+> when switching between spindles any offset between the spindles must be handled by gcode commands, typically by applying an offset and moving
 the controlled point \(tooltip\) to the required position.
 
 <sup>1</sup> These numbers are defined by compile time configuration and can be lower.
 
 ---
 
-__NOTE:__ if laser mode is enabled by the `$32` setting it will only be honoured if the current spindle is a PWM spindle capable of laser mode.  
+> [!NOTE]
+> If laser mode is enabled by the `$32` setting it will only be honoured if the current spindle is a PWM spindle capable of laser mode.  
 
 ---
-2023-02-13
+2025-01-07

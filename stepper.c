@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2024 Terje Io
+  Copyright (c) 2023-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@
 #if SPINDLE_ENABLE & (1<<SPINDLE_STEPPER)
 
 #if N_AXIS < 4
-//#error Stepper spindle can only bind to an axis > Z axis!
+#error Stepper spindle can only bind to an axis > Z axis!
 #endif
 
 #include "grbl/stepper2.h"
@@ -161,7 +161,6 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
     return &spindle_data;
 }
 
-
 static void spindleDataReset (void)
 {
     offset = st2_get_position(motor);
@@ -185,23 +184,24 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
 {
     settings_changed(settings, changed);
 
-    if(changed.spindle) {
+    spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
 
-        spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
+    if(changed.spindle || spindle->rpm_max != settings->axis[axis_idx].max_rate) {
+
+        spindle_ptrs_t *spindle_hal;
 
         spindle->rpm_min = settings->pwm_spindle.rpm_min;
-        spindle->rpm_max = settings->pwm_spindle.rpm_max;
+        spindle->rpm_max = min(settings->pwm_spindle.rpm_max, settings->axis[axis_idx].max_rate);
         spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
         spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
+
+        if((spindle_hal = spindle_get_hal(spindle_id, SpindleHAL_Active))) {
+            spindle_hal->rpm_min = spindle->rpm_min;
+            spindle_hal->rpm_max = spindle->rpm_max;
+            spindle_hal->at_speed_tolerance = spindle->at_speed_tolerance;
+        }
     }
 }
-
-/*
-static void raise_alarm (sys_state_t state)
-{
-    system_raise_alarm(Alarm_Spindle);
-}
-*/
 
 #ifdef GRBL_ESP32
 
