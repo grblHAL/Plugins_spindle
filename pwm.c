@@ -5,7 +5,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2024 Terje Io
+  Copyright (c) 2023-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -149,7 +149,7 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
         port_on = spindle_config->port_on;
         port_dir = spindle_config->port_dir;
 
-        if((port = hal.port.get_pin_info(Port_Analog, Port_Output, port_pwm))) {
+        if((port = ioport_get_info(Port_Analog, Port_Output, port_pwm))) {
 
             memcpy(&pwm_port, port, sizeof(xbar_t));
 
