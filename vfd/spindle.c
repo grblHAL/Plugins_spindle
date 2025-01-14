@@ -156,7 +156,7 @@ uint32_t vfd_get_modbus_address (spindle_id_t spindle_id)
 
 #if N_SPINDLE_SELECTABLE > 1
 
-static bool is_vfd_spindle (const setting_detail_t *setting)
+static bool is_vfd_spindle (const setting_detail_t *setting, uint_fast16_t offset)
 {
     uint_fast8_t idx = n_spindle;
     spindle_ptrs_t *spindle = NULL;
@@ -177,14 +177,14 @@ static bool is_vfd_spindle (const setting_detail_t *setting)
 
 #if N_SPINDLE == 1
 
-static bool is_modvfd_selected (const setting_detail_t *setting)
+static bool is_modvfd_selected (const setting_detail_t *setting, uint_fast16_t offset)
 {
     return true;
 }
 
 #else
 
-static bool is_modvfd_selected (const setting_detail_t *setting)
+static bool is_modvfd_selected (const setting_detail_t *setting, uint_fast16_t offset)
 {
     bool ok = false;
     uint_fast8_t idx = n_spindle;
@@ -205,14 +205,14 @@ static bool is_modvfd_selected (const setting_detail_t *setting)
 
 #if N_SPINDLE == 1
 
-static bool is_ysgl_selected (const setting_detail_t *setting)
+static bool is_ysgl_selected (const setting_detail_t *setting, uint_fast16_t offset)
 {
     return true;
 }
 
 #else
 
-static bool is_ysgl_selected (const setting_detail_t *setting)
+static bool is_ysgl_selected (const setting_detail_t *setting, uint_fast16_t offset)
 {
     bool ok = false;
     uint_fast8_t idx = n_spindle;

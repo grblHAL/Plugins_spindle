@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2024 Terje Io
+  Copyright (c) 2023-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -59,7 +59,8 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     spindle_state = state;
 
 #if SPINDLE_ENABLE & (1<<SPINDLE_ONOFF1_DIR)
-    hal.port.digital_out(run.dir_port, state.ccw);
+    if(run.dir_port != 0xFF)
+        hal.port.digital_out(run.dir_port, state.ccw);
 #endif
     hal.port.digital_out(run.on_port, state.on);
 }
@@ -74,37 +75,88 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
 static void onoff_spindle_register (void)
 {
-    static const spindle_ptrs_t spindle = {
+    static const spindle_ptrs_t spindle_on = {
         .type = SpindleType_Basic,
         .ref_id = SPINDLE_ONOFF1,
         .cap = {
-#if ON_OFF_N_PORTS == 2
-            .direction = On,
-#endif
             .gpio_controlled = On
         },
         .set_state = spindleSetState,
         .get_state = spindleGetState
     };
 
-    if((spindle_register(&spindle, "On/off spindle")) != -1)
+    static const spindle_ptrs_t spindle_on_dir = {
+        .type = SpindleType_Basic,
+        .ref_id = SPINDLE_ONOFF1_DIR,
+        .cap = {
+            .direction = On,
+            .gpio_controlled = On
+        },
+        .set_state = spindleSetState,
+        .get_state = spindleGetState
+    };
+
+    if((spindle_register(run.dir_port == 0xFF ? &spindle_on : &spindle_on_dir, "On/off spindle")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
         protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
+static status_code_t set_port (setting_id_t setting, float value)
+{
+    status_code_t status;
+
+    if((status = isintf(value) ? Status_OK : Status_BadNumberFormat) == Status_OK)
+      switch(setting) {
+
+        case Setting_Spindle_OnPort:
+            spindle_config.on_port = value < 0.0f ? 0xFF : (uint8_t)value;
+            break;
+
+        case Setting_Spindle_DirPort:
+            spindle_config.dir_port = value < 0.0f ? 0xFF : (uint8_t)value;
+            break;
+
+        default:
+            break;
+    }
+
+    return status;
+}
+
+static float get_port (setting_id_t setting)
+{
+    float value = 0.0f;
+
+    switch(setting) {
+
+        case Setting_Spindle_OnPort:
+            value = spindle_config.on_port >= n_dout ? -1.0f : (float)spindle_config.on_port;
+            break;
+
+        case Setting_Spindle_DirPort:
+            value = spindle_config.dir_port >= n_dout ? -1.0f : (float)spindle_config.dir_port;
+            break;
+
+        default:
+            break;
+    }
+
+    return value;
+}
+
 static const setting_detail_t vfd_settings[] = {
-    { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Int8, "#0", "0", max_dport, Setting_NonCore, &spindle_config.on_port, NULL, NULL, { .reboot_required = On } },
+    { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } },
 #if ON_OFF_N_PORTS == 2
-    { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Int8, "#0", "0", max_dport, Setting_NonCore, &spindle_config.dir_port, NULL, NULL, { .reboot_required = On } }
+    { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } }
 #endif
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t spindle_settings_descr[] = {
-    { Setting_Spindle_OnPort, "Spindle  0 (default spindle) VFD ModBus address" },
+    { Setting_Spindle_OnPort, "On/off spindle on/off port. Set to -1 to disable." },
 #if ON_OFF_N_PORTS == 2
-    { Setting_Spindle_DirPort, "Spindle 1 VFD ModBus address" }
+    { Setting_Spindle_DirPort, "On/off spindle direction port. Set to -1 to disable." }
 #endif
 };
 #endif
@@ -117,7 +169,12 @@ static void spindle_settings_save (void)
 static void spindle_settings_restore (void)
 {
     spindle_config.on_port = n_dout - 1;
+#if ON_OFF_N_PORTS == 2
     spindle_config.dir_port = n_dout > 1 ? n_dout - 2 : 0;
+#else
+    spindle_config.dir_port = 0xFF;
+#endif
+
 
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&spindle_config, sizeof(onoff_spindle_settings_t), true);
 }
@@ -125,16 +182,21 @@ static void spindle_settings_restore (void)
 static void spindle_settings_load (void)
 {
     bool ok;
+
     if((hal.nvs.memcpy_from_nvs((uint8_t *)&spindle_config, nvs_address, sizeof(onoff_spindle_settings_t), true) != NVS_TransferResult_OK))
         spindle_settings_restore();
 
     run.on_port = spindle_config.on_port;
+#if ON_OFF_N_PORTS == 2
     run.dir_port = spindle_config.dir_port;
+#else
+    run.dir_port = 0xFF;
+#endif
     strcpy(max_dport, uitoa(max(n_dout, ioports_available(Port_Digital, Port_Output)) - 1));
 
     ok = ioport_claim(Port_Digital, Port_Output, &run.on_port, "Spindle on");
 #if ON_OFF_N_PORTS == 2
-    ok = ok && ioport_claim(Port_Digital, Port_Output, &run.dir_port, "Spindle direction");
+    ok = ok && (run.dir_port == 0xFF || ioport_claim(Port_Digital, Port_Output, &run.dir_port, "Spindle direction"));
 #endif
     if(ok)
         onoff_spindle_register();
@@ -142,33 +204,25 @@ static void spindle_settings_load (void)
         protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 
-static setting_details_t vfd_setting_details = {
-    .settings = vfd_settings,
-    .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = spindle_settings_descr,
-    .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .load = spindle_settings_load,
-    .restore = spindle_settings_restore,
-    .save = spindle_settings_save
-};
-
 void onoff_spindle_init (void)
 {
-    if((n_dout = hal.port.num_digital_out) < ON_OFF_N_PORTS)
-        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
+    static setting_details_t vfd_setting_details = {
+        .settings = vfd_settings,
+        .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
+    #ifndef NO_SETTINGS_DESCRIPTIONS
+        .descriptions = spindle_settings_descr,
+        .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
+    #endif
+        .load = spindle_settings_load,
+        .restore = spindle_settings_restore,
+        .save = spindle_settings_save
+    };
 
-    else if(!ioport_can_claim_explicit()) {
-        run.on_port = --hal.port.num_digital_out;
-#if ON_OFF_N_PORTS == 2
-        run.dir_port = --hal.port.num_digital_out;
-#endif
-        onoff_spindle_register();
-    } else if((nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t)))) {
-        hal.port.num_digital_out -= ON_OFF_N_PORTS;
+    if((n_dout = ioports_available(Port_Digital, Port_Input)) >= ON_OFF_N_PORTS &&
+         ioport_can_claim_explicit() &&
+          (nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t))))
         settings_register(&vfd_setting_details);
-    } else
+    else
         protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
 }
 

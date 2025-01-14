@@ -142,7 +142,7 @@ static void report_options (bool newopt)
     }
 }
 
-static bool is_setting2_available (const setting_detail_t *setting)
+static bool is_setting2_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
     return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].ref_id != SPINDLE_NONE);
 }
@@ -176,7 +176,7 @@ static spindle_id_t get_spindle_id (uint8_t ref_id)
     return spindle_id;
 }
 
-static bool is_setting1_available (const setting_detail_t *setting)
+static bool is_setting1_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
     return (setting->id - Setting_SpindleEnable0) < n_spindle;
 }

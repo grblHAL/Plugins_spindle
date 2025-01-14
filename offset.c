@@ -4,9 +4,9 @@
 
   Part of grblHAL
 
-  grblHAL (c) 2024 Terje Io
+  grblHAL (c) 2024-2025 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
@@ -87,7 +87,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         on_spindle_selected(spindle);
 }
 
-static bool is_setting_available (const setting_detail_t *setting)
+static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
     return true; // TODO: check if there is a non-default laser spindle available
 }
@@ -141,7 +141,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Spindle offset", "0.01");
+        report_plugin("Spindle offset", "0.02");
 }
 
 void spindle_offset_init (void)
