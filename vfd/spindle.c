@@ -330,25 +330,9 @@ static void vfd_settings_restore (void)
 
 static void vfd_settings_load (void)
 {
-    if(nvs_address != 0) {
-        if((hal.nvs.memcpy_from_nvs((uint8_t *)&vfd_config, nvs_address, sizeof(vfd_settings_t), true) != NVS_TransferResult_OK))
-            vfd_settings_restore();
-    }
+    if((hal.nvs.memcpy_from_nvs((uint8_t *)&vfd_config, nvs_address, sizeof(vfd_settings_t), true) != NVS_TransferResult_OK))
+        vfd_settings_restore();
 }
-
-static setting_details_t vfd_setting_details = {
-    .groups = vfd_groups,
-    .n_groups = sizeof(vfd_groups) / sizeof(setting_group_detail_t),
-    .settings = vfd_settings,
-    .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = vfd_settings_descr,
-    .n_descriptions = sizeof(vfd_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .load = vfd_settings_load,
-    .restore = vfd_settings_restore,
-    .save = vfd_settings_save
-};
 
 static void vfd_spindle_selected (spindle_ptrs_t *spindle)
 {
@@ -400,6 +384,20 @@ const vfd_ptrs_t *vfd_get_active (void)
 
 void vfd_init (void)
 {
+    static setting_details_t vfd_setting_details = {
+        .groups = vfd_groups,
+        .n_groups = sizeof(vfd_groups) / sizeof(setting_group_detail_t),
+        .settings = vfd_settings,
+        .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
+    #ifndef NO_SETTINGS_DESCRIPTIONS
+        .descriptions = vfd_settings_descr,
+        .n_descriptions = sizeof(vfd_settings_descr) / sizeof(setting_descr_t),
+    #endif
+        .load = vfd_settings_load,
+        .restore = vfd_settings_restore,
+        .save = vfd_settings_save
+    };
+
     if(modbus_enabled() && (nvs_address = nvs_alloc(sizeof(vfd_settings_t)))) {
 
         settings_register(&vfd_setting_details);
