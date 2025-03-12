@@ -136,7 +136,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
-    int64_t position = st2_get_position(motor) - offset;
+    uint32_t position = (uint32_t)llabs(st2_get_position(motor) - offset);
 
     switch(request) {
 
