@@ -54,8 +54,6 @@ static void stepperEnable (axes_signals_t enable, bool hold)
 
     if(running)
         enable.mask |= axis_mask;
-    else if((settings.steppers.energize.mask & axis_mask) == 0)
-        enable.mask &= ~axis_mask;
 
     stepper_enable(enable, hold);
 }
@@ -63,10 +61,36 @@ static void stepperEnable (axes_signals_t enable, bool hold)
 static void onSpindleStopped (void *data)
 {
     if(stopping) {
+
         stopping = running = false;
         hal.stepper.enable(steppers_enabled, false);
-        if(hal.stepper.claim_motor)
+
+        if(hal.stepper.claim_motor && settings.stepper_spindle_flags.allow_axis_control) {
+
             hal.stepper.claim_motor(axis_idx, false);
+
+            if(settings.stepper_spindle_flags.sync_position) {
+
+                spindle_ptrs_t *spindle;
+
+                if((spindle = spindle_get(spindle_id)) && spindle->get_data) {
+
+                    float ftmp;
+
+                    if(modff(settings.axis[axis_idx].steps_per_mm, &ftmp) == 0.0f)
+                        sys.position[axis_idx] = (int32_t)((st2_get_position(motor) - offset) % (int64_t)settings.axis[axis_idx].steps_per_mm);
+
+                    else {
+
+                        double pos, tmp;
+                        pos = modf((double)(st2_get_position(motor) - offset) / (double)settings.axis[axis_idx].steps_per_mm, &tmp);
+
+                        sys.position[axis_idx] = lround(pos * (double)settings.axis[axis_idx].steps_per_mm);
+                    }
+                    sync_position();
+                }
+            }
+        }
     }
 }
 
@@ -99,11 +123,16 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
     if(state.on) {
 
-        running = true;
-        stopping = false;
+        if(rpm > 0.0f) {
+            running = true;
+            stopping = false;
+        }
+
         hal.stepper.enable(steppers_enabled, false);
+
         if(hal.stepper.claim_motor)
             hal.stepper.claim_motor(axis_idx, true);
+
         if(st2_motor_running(motor)) {
             if(state.ccw != spindle_data.state_programmed.ccw) {
                 st2_motor_stop(motor);
@@ -115,8 +144,11 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
                 st2_motor_move(motor, state.ccw ? -1.0f : 1.0f, rpm, Stepper2_InfiniteSteps);
             } else
                 st2_motor_set_speed(motor, rpm);
-        } else
+        } else {
+            if(settings.stepper_spindle_flags.sync_position)
+                st2_set_position(motor, (int64_t)sys.position[axis_idx] + offset);
             st2_motor_move(motor, state.ccw ? -1.0f : 1.0f, rpm, Stepper2_InfiniteSteps);
+        }
     } else
         stopping = st2_motor_stop(motor);
 
@@ -201,6 +233,13 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
             spindle_hal->at_speed_tolerance = spindle->at_speed_tolerance;
         }
     }
+
+    if(motor && hal.stepper.claim_motor) {
+        if(!settings->stepper_spindle_flags.allow_axis_control)
+            hal.stepper.claim_motor(axis_idx, true);
+        else if(!running)
+            hal.stepper.claim_motor(axis_idx, false);
+    }
 }
 
 #ifdef GRBL_ESP32
@@ -211,6 +250,29 @@ static void esp32_spindle_off (spindle_ptrs_t *spindle)
 }
 
 #endif
+
+PROGMEM static const setting_detail_t spindle_setting_detail[] = {
+    { Setting_StepperSpindle_Options, Group_Spindle, "Stepper spindle options", NULL, Format_Bitfield, "Allow axis control,Sync position", NULL, NULL, Setting_IsExtended, &settings.stepper_spindle_flags.mask, NULL, NULL },
+};
+
+#ifndef NO_SETTINGS_DESCRIPTIONS
+
+PROGMEM static const setting_descr_t spindle_setting_descr[] = {
+    { Setting_StepperSpindle_Options, "Allow axis control is for enabling axis motion commands when the spindle is stopped.\\n"
+                                      "Sync position syncs the position within one turn of the spindle."
+    }
+};
+
+#endif
+
+static void _settings_restore (void)
+{
+//    settings_write_global();
+}
+
+static void _settings_load (void)
+{
+}
 
 void stepper_spindle_init (void)
 {
@@ -235,7 +297,22 @@ void stepper_spindle_init (void)
         .update_rpm = spindleUpdateRPM
     };
 
+    static setting_details_t setting_details = {
+        .is_core = true,
+        .settings = spindle_setting_detail,
+        .n_settings = sizeof(spindle_setting_detail) / sizeof(setting_detail_t),
+#ifndef NO_SETTINGS_DESCRIPTIONS
+        .descriptions = spindle_setting_descr,
+        .n_descriptions = sizeof(spindle_setting_descr) / sizeof(setting_descr_t),
+#endif
+        .save = settings_write_global,
+        .load = _settings_load,
+        .restore = _settings_restore
+    };
+
     if((motor = st2_motor_init(axis_idx, true)) && (spindle_id = spindle_register(&spindle, "Stepper")) != -1) {
+
+        settings_register(&setting_details);
 
         if(st2_motor_poll(motor)) {
 
