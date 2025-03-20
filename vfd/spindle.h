@@ -25,21 +25,13 @@
 #ifndef _VFD_SPINDLE_H_
 #define _VFD_SPINDLE_H_
 
-#ifdef ARDUINO
-#include "../../grbl/hal.h"
-#include "../../grbl/protocol.h"
-#include "../../grbl/state_machine.h"
-#include "../../grbl/report.h"
-#include "../../grbl/modbus.h"
-#else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
 #include "grbl/state_machine.h"
 #include "grbl/report.h"
 #include "grbl/modbus.h"
-#endif
 
-#include "../shared.h"
+#include "spindle/shared.h"
 
 #ifndef VFD_RETRIES
 #define VFD_RETRIES     5

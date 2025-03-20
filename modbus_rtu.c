@@ -21,31 +21,19 @@
 
 */
 
-#ifdef ARDUINO
-#include "../driver.h"
-#else
 #include "driver.h"
-#endif
 
 #if MODBUS_ENABLE & MODBUS_RTU_ENABLED
 
 #include <string.h>
 
-#ifdef ARDUINO
-#include "../grbl/protocol.h"
-#include "../grbl/settings.h"
-#include "../grbl/crc.h"
-#include "../grbl/nvs_buffer.h"
-#include "../grbl/state_machine.h"
-#else
+#include "modbus_rtu.h"
+
 #include "grbl/protocol.h"
 #include "grbl/settings.h"
 #include "grbl/crc.h"
 #include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
-#endif
-
-#include "modbus_rtu.h"
 
 #ifndef MODBUS_BAUDRATE
 #define MODBUS_BAUDRATE 3 // 19200

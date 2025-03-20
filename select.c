@@ -24,15 +24,9 @@
 
 #include "driver.h"
 
-#ifdef ARDUINO
-#include "../grbl/hal.h"
-#include "../grbl/nvs_buffer.h"
-#include "../grbl/protocol.h"
-#else
 #include "grbl/hal.h"
 #include "grbl/nvs_buffer.h"
 #include "grbl/protocol.h"
-#endif
 
 #if N_SPINDLE > 1
 

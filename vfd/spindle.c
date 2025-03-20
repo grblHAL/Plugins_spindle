@@ -22,20 +22,16 @@
 
 */
 
-#include "../shared.h"
+#include "spindle/shared.h"
 
 #if VFD_ENABLE
 
 #include <math.h>
 #include <string.h>
 
-#ifdef ARDUINO
-#include "../../grbl/nvs_buffer.h"
-#else
-#include "grbl/nvs_buffer.h"
-#endif
-
 #include "spindle.h"
+
+#include "grbl/nvs_buffer.h"
 
 #if SPINDLE_ENABLE == SPINDLE_ALL && N_SPINDLE == 1
 #warning Increase N_SPINDLE in grbl/config.h to a value high enough to accomodate all spindles.

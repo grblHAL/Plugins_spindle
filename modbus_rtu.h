@@ -24,11 +24,7 @@
 #ifndef _MODBUS_RTU_H_
 #define _MODBUS_RTU_H_
 
-#ifdef ARDUINO
-#include "../grbl/modbus.h"
-#else
 #include "grbl/modbus.h"
-#endif
 
 typedef enum {
     ModBus_Idle,
