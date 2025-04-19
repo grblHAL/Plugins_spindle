@@ -60,9 +60,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
 #if SPINDLE_ENABLE & (1<<SPINDLE_ONOFF1_DIR)
     if(run.dir_port != 0xFF)
-        hal.port.digital_out(run.dir_port, state.ccw);
+        ioport_digital_out(run.dir_port, state.ccw);
 #endif
-    hal.port.digital_out(run.on_port, state.on);
+    ioport_digital_out(run.on_port, state.on);
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -99,7 +99,7 @@ static void onoff_spindle_register (void)
     if((spindle_register(run.dir_port == 0xFF ? &spindle_on : &spindle_on_dir, "On/off spindle")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
-        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
+        task_run_on_startup(report_warning, "On/off spindle failed to initialize!");
 }
 
 static status_code_t set_port (setting_id_t setting, float value)
@@ -201,7 +201,7 @@ static void spindle_settings_load (void)
     if(ok)
         onoff_spindle_register();
     else
-        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
+        task_run_on_startup(report_warning, "On/off spindle failed to initialize!");
 }
 
 void onoff_spindle_init (void)
@@ -223,7 +223,7 @@ void onoff_spindle_init (void)
           (nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t))))
         settings_register(&vfd_setting_details);
     else
-        protocol_enqueue_foreground_task(report_warning, "On/off spindle failed to initialize!");
+        task_run_on_startup(report_warning, "On/off spindle failed to initialize!");
 }
 
 #else // ON_OFF_N_PORTS == 0

@@ -55,7 +55,7 @@ static const modbus_callbacks_t callbacks = {
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
-    return modbus_isup();
+    return modbus_isup().rtu;
 }
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM

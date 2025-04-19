@@ -455,7 +455,7 @@ static bool spindle_select_config (settings_t *settings)
 #endif
     }
 
-    protocol_enqueue_foreground_task(activate_spindles, NULL);
+    task_run_on_startup(activate_spindles, NULL);
 
     return ok;
 }
@@ -500,7 +500,7 @@ void spindle_select_init (void)
         driver_setup = hal.driver_setup;
         hal.driver_setup = spindle_select_config;
     } else
-        protocol_enqueue_foreground_task(report_warning, "Spindle select plugin failed to initialize!");
+        task_run_on_startup(report_warning, "Spindle select plugin failed to initialize!");
 }
 
 #endif

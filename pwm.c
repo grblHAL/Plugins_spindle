@@ -43,9 +43,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     spindle_state = state;
 
     if(state.on && port_dir != 255)
-        hal.port.digital_out(port_dir, state.ccw);
+        ioport_digital_out(port_dir, state.ccw);
 
-    hal.port.digital_out(port_on, state.on);
+    ioport_digital_out(port_on, state.on);
 }
 
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
@@ -60,7 +60,7 @@ static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
 {
     UNUSED(spindle);
 
-    hal.port.analog_out(port_pwm, rpm);
+    ioport_analog_out(port_pwm, rpm);
 }
 
 // Start or stop spindle
@@ -71,10 +71,10 @@ static void spindleSetStateVariable (spindle_ptrs_t *spindle, spindle_state_t st
     spindle_state = state;
 
     if(state.on && port_dir != 255)
-        hal.port.digital_out(port_dir, state.ccw);
+        ioport_digital_out(port_dir, state.ccw);
 
-    hal.port.digital_out(port_on, state.on);
-    hal.port.analog_out(port_pwm, rpm);
+    ioport_digital_out(port_on, state.on);
+    ioport_analog_out(port_pwm, rpm);
 }
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
@@ -132,7 +132,7 @@ static void pwm_spindle_register (void)
     if((spindle_id = spindle_register(&spindle, "PWM2")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
-        protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
+        task_run_on_startup(report_warning, "PWM2 spindle failed to initialize!");
 }
 
 static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
@@ -164,7 +164,7 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
         if(ok)
             pwm_spindle_register();
         else
-            protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
+            task_run_on_startup(report_warning, "PWM2 spindle failed to initialize!");
     }
 
     spindleConfig(spindle_get_hal(spindle_id, SpindleHAL_Configured));
@@ -175,7 +175,7 @@ void pwm_spindle_init (void)
     if((spindle_config = spindle1_settings_add(true)))
         spindle1_settings_register(spindle.cap, spindle_settings_changed);
     else
-        protocol_enqueue_foreground_task(report_warning, "PWM2 spindle failed to initialize!");
+        task_run_on_startup(report_warning, "PWM2 spindle failed to initialize!");
 }
 
 #endif

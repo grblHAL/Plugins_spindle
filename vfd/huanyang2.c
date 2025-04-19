@@ -193,7 +193,7 @@ static void rx_packet (modbus_message_t *msg)
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
-    return modbus_isup();
+    return modbus_isup().rtu;
 }
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)

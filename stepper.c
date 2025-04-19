@@ -332,7 +332,7 @@ void stepper_spindle_init (void)
         hal.settings_changed = settingsChanged;
 
     } else
-        protocol_enqueue_foreground_task(report_warning, "Stepper spindle has been disabled!");
+        task_run_on_startup(report_warning, "Stepper spindle has been disabled!");
 }
 
 #endif

@@ -56,7 +56,7 @@ static const modbus_callbacks_t callbacks = {
 
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
-    return modbus_isup();
+    return modbus_isup().rtu;
 }
 
 static void set_rpm (float rpm, bool block)

@@ -363,12 +363,12 @@ bool vfd_failed (bool disable)
     bool ok = true;
 
     if(sys.cold_start)
-        protocol_enqueue_foreground_task(raise_alarm, NULL);
+        task_add_immediate(raise_alarm, NULL);
     else
         system_raise_alarm(Alarm_Spindle);
 
     if(disable && (ok = spindle_select(spindle_add_null())))
-        protocol_enqueue_foreground_task(report_warning, "VFD spindle has been disabled!");
+        task_add_immediate(report_warning, "VFD spindle has been disabled!");
 
     return ok;
 }
