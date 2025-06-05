@@ -122,9 +122,9 @@ static void set_rpm (float rpm, bool block)
     if(busy && !block)
         return;
 
-    if(rpm != spindle_data.rpm_programmed) {
+    if(rpm_at_50Hz != 0.0f && rpm != spindle_data.rpm_programmed) {
 
-        uint32_t data = lroundf(rpm * 5000.0f / (float)rpm_at_50Hz); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
+        uint32_t data = lroundf(rpm * 5000.0f / rpm_at_50Hz); // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
 
         modbus_message_t rpm_cmd = {
             .context = (void *)VFD_SetRPM,
@@ -286,18 +286,21 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.14");
+        report_plugin("HUANYANG VFD", "0.15");
+}
+
+static void after_reset (void *data)
+{
+    spindleGetRPMLimits();
+    spindleGetMaxAmps();
 }
 
 static void onDriverReset (void)
 {
     driver_reset();
 
-    if(spindle_hal) {
-
-        spindleGetRPMLimits();
-        spindleGetMaxAmps();
-    }
+    if(spindle_hal)
+        task_add_delayed(after_reset, NULL, 50);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

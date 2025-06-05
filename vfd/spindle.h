@@ -30,6 +30,7 @@
 #include "grbl/state_machine.h"
 #include "grbl/report.h"
 #include "grbl/modbus.h"
+#include "grbl/task.h"
 
 #include "spindle/shared.h"
 

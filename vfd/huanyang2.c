@@ -52,7 +52,7 @@ static const modbus_callbacks_t callbacks = {
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
-static void spindleGetMaxRPM (void)
+static void spindleGetMaxRPM (void *data)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxRPM,
@@ -77,7 +77,7 @@ static void set_rpm (float rpm, bool block)
     if(busy && !block)
         return;
 
-    if (rpm != spindle_data.rpm_programmed) {
+    if(rpm_max && rpm != spindle_data.rpm_programmed) {
 
         uint16_t data = (uint32_t)(rpm) * 10000UL / rpm_max;
 
@@ -213,7 +213,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG P2A VFD", "0.12");
+        report_plugin("HUANYANG P2A VFD", "0.13");
 }
 
 static void onDriverReset (void)
@@ -221,7 +221,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        spindleGetMaxRPM();
+        task_add_delayed(spindleGetMaxRPM, NULL, 50);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -233,7 +233,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetMaxRPM();
+        spindleGetMaxRPM(NULL);
 
     } else
         spindle_hal = NULL;

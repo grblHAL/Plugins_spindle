@@ -60,7 +60,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
-static void spindleGetRPMRange (void)
+static void spindleGetRPMRange (void *data)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetRPMRange,
@@ -230,7 +230,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Nowforever VFD", "0.02");
+        report_plugin("Nowforever VFD", "0.03");
 }
 
 static void onDriverReset (void)
@@ -238,7 +238,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        spindleGetRPMRange();
+        task_add_delayed(spindleGetRPMRange, NULL, 50);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -251,7 +251,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         modbus_set_silence(NULL);
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetRPMRange();
+        spindleGetRPMRange(NULL);
 
     } else
         spindle_hal = NULL;
