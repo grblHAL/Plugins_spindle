@@ -30,7 +30,7 @@
 
 #include "spindle.h"
 
-static uint32_t modbus_address;
+static uint32_t modbus_address, exceptions = 0;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_state_t vfd_state = {0};
@@ -168,6 +168,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
+                exceptions = 0;
                 spindle_validate_at_speed(spindle_data, (float)((msg->adu[3] << 8) | msg->adu[4]) * vfd_config.vfd_rpm_hz / 100);
                 break;
 
@@ -183,7 +184,8 @@ static void rx_packet (modbus_message_t *msg)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    vfd_failed(false);
+    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+        vfd_failed(false);
 }
 
 void onReportOptions (bool newopt)

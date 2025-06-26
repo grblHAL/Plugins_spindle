@@ -30,7 +30,7 @@
 
 #include "spindle.h"
 
-static uint32_t modbus_address, rpm_max = 0;
+static uint32_t modbus_address, rpm_max = 0, exceptions = 0;
 static spindle_id_t spindle_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_state_t vfd_state = {0};
@@ -174,6 +174,7 @@ static void rx_packet (modbus_message_t *msg)
         switch((vfd_response_t)msg->context) {
 
             case VFD_GetRPM:
+                exceptions = 0;
                 spindle_validate_at_speed(spindle_data, (float)((msg->adu[4] << 8) | msg->adu[5]));
                 break;
 
@@ -203,9 +204,8 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
-    // emptied on a warm reset). Exception is during cold start, where alarms need to be queued.
-    vfd_failed(false);
+    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+        vfd_failed(false);
 }
 
 static void onReportOptions (bool newopt)
