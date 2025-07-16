@@ -30,7 +30,7 @@
 #include "grbl/protocol.h"
 #include "grbl/nvs_buffer.h"
 
-static uint8_t port_pwm = 0, port_on = 0, port_dir = 255;
+static uint8_t port_pwm = 0, port_on = 0, port_dir = IOPORT_UNASSIGNED;
 static xbar_t pwm_port;
 static spindle_id_t spindle_id = -1;
 static spindle1_pwm_settings_t *spindle_config;
@@ -42,7 +42,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
     spindle_state = state;
 
-    if(state.on && port_dir != 255)
+    if(state.on && port_dir != IOPORT_UNASSIGNED)
         ioport_digital_out(port_dir, state.ccw);
 
     ioport_digital_out(port_on, state.on);
@@ -70,7 +70,7 @@ static void spindleSetStateVariable (spindle_ptrs_t *spindle, spindle_state_t st
 
     spindle_state = state;
 
-    if(state.on && port_dir != 255)
+    if(state.on && port_dir != IOPORT_UNASSIGNED)
         ioport_digital_out(port_dir, state.ccw);
 
     ioport_digital_out(port_on, state.on);
@@ -94,7 +94,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
     config.off_value = spindle_config->cfg.pwm_off_value;
     config.invert = Off; // TODO: add setting
 
-    spindle->cap.direction = port_dir != 255;
+    spindle->cap.direction = port_dir != IOPORT_UNASSIGNED;
     spindle->cap.rpm_range_locked = On;
     spindle->rpm_min = spindle_config->cfg.rpm_min;
     spindle->rpm_max = spindle_config->cfg.rpm_max;
@@ -147,6 +147,10 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
         init_ok = true;
         port_pwm = spindle_config->port_pwm;
         port_on = spindle_config->port_on;
+#if (SPINDLE_ENABLE & 1<<SPINDLE_PWM2_NODIR)
+        if(spindle_config->port_dir != IOPORT_UNASSIGNED)
+            spindle_config->port_dir = IOPORT_UNASSIGNED;
+#endif
         port_dir = spindle_config->port_dir;
 
         if((port = ioport_get_info(Port_Analog, Port_Output, port_pwm))) {
@@ -156,7 +160,7 @@ static void spindle_settings_changed (spindle1_pwm_settings_t *settings)
             if((ok = pwm_port.cap.pwm && ioport_claim(Port_Analog, Port_Output, &port_pwm, "Spindle PWM"))) {
                 ok = ioport_claim(Port_Digital, Port_Output, &port_on, "PWM spindle on");
 #if !(SPINDLE_ENABLE & 1<<SPINDLE_PWM2_NODIR)
-                ok = ok && (port_dir == 255 || ioport_claim(Port_Digital, Port_Output, &port_dir, "PWM spindle dir"));
+                ok = ok && (port_dir == IOPORT_UNASSIGNED || ioport_claim(Port_Digital, Port_Output, &port_dir, "PWM spindle dir"));
 #endif
             }
         }
