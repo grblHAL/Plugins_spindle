@@ -79,6 +79,17 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
             if(mc_line(target.values, &plan_data)) {
                 protocol_buffer_synchronize();
                 sync_position();
+
+                if(settings.pwm_spindle.flags.g92offset) {
+
+                    gc_state.g92_coord_offset[0] += plugin_settings.offset[0].x * (laser_spindle_id == -1 ? -1.0f : 1.0f);
+                    gc_state.g92_coord_offset[1] += plugin_settings.offset[0].y * (laser_spindle_id == -1 ? -1.0f : 1.0f);
+
+    // save?                if(!settings.flags.g92_is_volatile)
+    //                    settings_write_coord_data(CoordinateSystem_G92, &gc_state.g92_coord_offset); // Save G92 offsets to non-volatile storage
+
+                    system_flag_wco_change();
+                }
             } // else alarm?
         }
     }
@@ -92,19 +103,31 @@ static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t
     return true; // TODO: check if there is a non-default laser spindle available
 }
 
+static status_code_t set_options (setting_id_t id, uint_fast16_t int_value)
+{
+    settings.pwm_spindle.flags.g92offset = int_value != 0;
+
+    settings_write_global();
+
+    return Status_OK;
+}
+
+static uint32_t get_options (setting_id_t id)
+{
+    return (uint32_t)settings.pwm_spindle.flags.g92offset;
+}
+
 static const setting_detail_t offset_settings[] = {
     { Setting_SpindleOffsetX, Group_Spindle, "Laser X offset", "mm", Format_Decimal, "-##0.000", "-1000", NULL, Setting_IsExtended, &plugin_settings.offset[0].x, NULL, is_setting_available },
     { Setting_SpindleOffsetY, Group_Spindle, "Laser Y offset", "mm", Format_Decimal, "-##0.000", "-1000", NULL, Setting_IsExtended, &plugin_settings.offset[0].y, NULL, is_setting_available },
+    { Setting_SpindleOffsetOptions, Group_Spindle, "Laser offset options", NULL, Format_RadioButtons, "Keep new position,Update G92 on spindle change", NULL, NULL, Setting_IsExtendedFn, set_options, get_options, is_setting_available },
 };
-
-#ifdef NO_SETTINGS_DESCRIPTIONS
 
 static const setting_descr_t offset_settings_descr[] = {
     { Setting_SpindleOffsetX, "X offset from current position for non-default laser spindle." },
-    { Setting_SpindleOffsetY, "X offset from current position for non-default laser spindle." }
+    { Setting_SpindleOffsetY, "Y offset from current position for non-default laser spindle." },
+    { Setting_SpindleOffsetOptions, "If update G92 offset is enabled then it is adjusted to keep the work position identical for the spindles." }
 };
-
-#endif
 
 static void offset_settings_save (void)
 {
@@ -124,28 +147,26 @@ static void offset_settings_load (void)
         offset_settings_restore();
 }
 
-static setting_details_t setting_details = {
-    .settings = offset_settings,
-    .n_settings = sizeof(offset_settings) / sizeof(setting_detail_t),
-#ifdef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = offset_settings_descr,
-    .n_descriptions = sizeof(offset_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .save = offset_settings_save,
-    .load = offset_settings_load,
-    .restore = offset_settings_restore
-};
-
 static void onReportOptions (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Spindle offset", "0.02");
+        report_plugin("Spindle offset", "0.03");
 }
 
 void spindle_offset_init (void)
 {
+    static setting_details_t setting_details = {
+        .settings = offset_settings,
+        .n_settings = sizeof(offset_settings) / sizeof(setting_detail_t),
+        .descriptions = offset_settings_descr,
+        .n_descriptions = sizeof(offset_settings_descr) / sizeof(setting_descr_t),
+        .save = offset_settings_save,
+        .load = offset_settings_load,
+        .restore = offset_settings_restore
+    };
+
     if((nvs_address = nvs_alloc(sizeof(offset_settings_t)))) {
 
         settings_register(&setting_details);

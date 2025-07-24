@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2022-2024 Terje Io
+  Copyright (c) 2022-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,16 +19,16 @@
   along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "driver.h"
+
+#if N_SPINDLE > 1
+
 #include <math.h>
 #include <string.h>
-
-#include "driver.h"
 
 #include "grbl/hal.h"
 #include "grbl/nvs_buffer.h"
 #include "grbl/protocol.h"
-
-#if N_SPINDLE > 1
 
 #define N_SPINDLE_SETTINGS 8
 #define SETTING_OPTS { .subgroups = Off, .increment = 1, .reboot_required = On }
@@ -138,19 +138,19 @@ static void report_options (bool newopt)
 
 static bool is_setting2_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
-    return n_spindle && (setting->id == Setting_SpindleToolStart0 || spindle_setting[setting->id - Setting_SpindleToolStart0].ref_id != SPINDLE_NONE);
+    return n_spindle && (setting->id == Setting_SpindleToolStartBase || spindle_setting[setting->id - Setting_SpindleToolStartBase].ref_id != SPINDLE_NONE);
 }
 
-static bool spindle_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
+static uint32_t get_tool_start (setting_id_t id)
 {
-    uint_fast16_t idx;
+    return (uint32_t)spindle_setting[id - Setting_SpindleToolStartBase].min_tool_id;
+}
 
-    for(idx = 0; idx < N_SPINDLE_SELECTABLE; idx++) {
-        if(idx == 0 || spindle_setting[idx].ref_id != SPINDLE_NONE)
-            callback(setting, idx, data);
-    }
+static status_code_t set_tool_start (setting_id_t id, uint32_t value)
+{
+    spindle_setting[id - Setting_SpindleToolStartBase].min_tool_id = (tool_id_t)value;
 
-    return true;
+    return Status_OK;
 }
 
 #endif // N_SYS_SPINDLE == 1
@@ -172,7 +172,7 @@ static spindle_id_t get_spindle_id (uint8_t ref_id)
 
 static bool is_setting1_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
-    return (setting->id - Setting_SpindleEnable0) < n_spindle;
+    return (setting->id - Setting_SpindleEnableBase) < n_spindle;
 }
 
 static status_code_t set_spindle_type (setting_id_t id, uint_fast16_t int_value)
@@ -180,84 +180,44 @@ static status_code_t set_spindle_type (setting_id_t id, uint_fast16_t int_value)
     spindle_id_t spindle_id = int_value - 1;
 
     if(spindle_id >= 0) {
-        if(spindle_get_count() < 2)
+        if(n_spindle < 2)
             return Status_SettingDisabled;
-        else if(spindle_id >= spindle_get_count())
+        else if(spindle_id >= n_spindle)
             return Status_SettingValueOutOfRange;
-        else if(spindle_id == default_spindle_id)
+        else if(spindle_id == setting_get_int_value(setting_get_details(Setting_SpindleType, NULL), 0))
             return Status_InvalidStatement;
 // TODO: check for duplicate registration and/or allow multiple instantiations of spindles where possible...
     }
 
-    spindle_setting[id - Setting_SpindleEnable0].ref_id = spindle_id == -1 ? SPINDLE_NONE : ref_id_map[spindle_id];
+    spindle_setting[id - Setting_SpindleEnableBase].ref_id = spindle_id == -1 ? SPINDLE_NONE : ref_id_map[spindle_id];
 
     return Status_OK;
 }
 
 static uint32_t get_int (setting_id_t id)
 {
-    return get_spindle_id(spindle_setting[id - Setting_SpindleEnable0].ref_id) + 1;
+    return get_spindle_id(spindle_setting[id - Setting_SpindleEnableBase].ref_id) + 1;
 }
 
 static const setting_detail_t spindle_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleEnable1, Group_Spindle, "Spindle 2", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleEnable2, Group_Spindle, "Spindle 3", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleEnable3, Group_Spindle, "Spindle 4", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 4
-    { Setting_SpindleEnable4, Group_Spindle, "Spindle 5", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 5
-    { Setting_SpindleEnable5, Group_Spindle, "Spindle 6", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 6
-    { Setting_SpindleEnable6, Group_Spindle, "Spindle 7", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
-#endif
-#if N_SPINDLE_SELECTABLE > 7
-    { Setting_SpindleEnable7, Group_Spindle, "Spindle 8", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, { .reboot_required = On } },
+    { Setting_SpindleEnableBase, Group_Spindle, "Spindle ?", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, SETTING_OPTS },
 #endif
 #if N_SYS_SPINDLE == 1
-    { Setting_SpindleToolStart0, Group_Spindle, "Spindle ? tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_NonCore, &spindle_setting[0].min_tool_id, NULL, is_setting2_available, SETTING_OPTS },
+    { Setting_SpindleToolStartBase, Group_Spindle, "Spindle ? tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_IsExtendedFn, set_tool_start, get_tool_start, is_setting2_available, SETTING_OPTS },
 #endif // N_SYS_SPINDLE
 };
 
-#ifndef NO_SETTINGS_DESCRIPTIONS
-
 static const setting_descr_t spindle_settings_descr[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleEnable1, "Spindle to use as spindle 2." },
-#endif
-#if N_SPINDLE_SELECTABLE > 2
-    { Setting_SpindleEnable2, "Spindle to use as spindle 3." },
-#endif
-#if N_SPINDLE_SELECTABLE > 3
-    { Setting_SpindleEnable3, "Spindle to use as spindle 4." },
-#endif
-#if N_SPINDLE_SELECTABLE > 4
-    { Setting_SpindleEnable4, "Spindle to use as spindle 5." },
-#endif
-#if N_SPINDLE_SELECTABLE > 5
-    { Setting_SpindleEnable5, "Spindle to use as spindle 6." },
-#endif
-#if N_SPINDLE_SELECTABLE > 6
-    { Setting_SpindleEnable5, "Spindle to use as spindle 7." },
-#endif
-#if N_SPINDLE_SELECTABLE > 7
-    { Setting_SpindleEnable5, "Spindle to use as spindle 8." },
+    { Setting_SpindleEnableBase, NULL },
 #endif
 #if N_SYS_SPINDLE == 1
-    { Setting_SpindleToolStart0, "Start of tool numbers for selecting the spindle.\\n"
+    { Setting_SpindleToolStartBase, "Start of tool numbers for selecting the spindle.\\n"
                                  "Normally leave this at 0 for spindle 1 (default spindle)."
     }
 #endif // N_SYS_SPINDLE
 };
-
-#endif // NO_SETTINGS_DESCRIPTIONS
 
 static void activate_spindles (void *data)
 {
@@ -415,6 +375,26 @@ static void spindle_settings_load (void)
 #endif // N_SYS_SPINDLE == 1
 }
 
+static bool spindle_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
+{
+    uint_fast16_t idx;
+
+    for(idx = setting->id == Setting_SpindleEnableBase ? 1 : 0; idx < N_SPINDLE_SELECTABLE; idx++) {
+        if(idx == 0 || setting->id == Setting_SpindleEnableBase || spindle_setting[idx].ref_id != SPINDLE_NONE)
+            callback(setting, idx, data);
+    }
+
+    return true;
+}
+
+static setting_id_t spindle_settings_normalize (setting_id_t id)
+{
+    return (id > Setting_SpindleEnableBase && id <= Setting_SpindleEnable7) ||
+            (id > Setting_SpindleToolStartBase && id <= Setting_SpindleToolStart7)
+              ? (setting_id_t)(id - (id % 10))
+              : id;
+}
+
 static bool map_spindles (spindle_info_t *spindle, void *data)
 {
     ref_id_map[spindle->id] = spindle->ref_id;
@@ -480,16 +460,13 @@ void spindle_select_init (void)
     static setting_details_t setting_details = {
         .settings = spindle_settings,
         .n_settings = sizeof(spindle_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
         .descriptions = spindle_settings_descr,
         .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
-#endif
         .save = spindle_settings_save,
         .load = spindle_settings_load,
         .restore = spindle_settings_restore,
-#if N_SYS_SPINDLE == 1
-        .iterator = spindle_settings_iterator
-#endif
+        .iterator = spindle_settings_iterator,
+        .normalize = spindle_settings_normalize
     };
 
     if((nvs_address = nvs_alloc(sizeof(spindle_setting)))) {
@@ -503,4 +480,4 @@ void spindle_select_init (void)
         task_run_on_startup(report_warning, "Spindle select plugin failed to initialize!");
 }
 
-#endif
+#endif //  N_SPINDLE > 1
