@@ -222,8 +222,8 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
 
         spindle_ptrs_t *spindle_hal;
 
-        spindle->rpm_min = settings->pwm_spindle.rpm_min;
-        spindle->rpm_max = min(settings->pwm_spindle.rpm_max, settings->axis[axis_idx].max_rate);
+        spindle->rpm_min = 0.0f;
+        spindle->rpm_max = settings->axis[axis_idx].max_rate;
         spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
         spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
 
@@ -255,15 +255,11 @@ PROGMEM static const setting_detail_t spindle_setting_detail[] = {
     { Setting_StepperSpindle_Options, Group_Spindle, "Stepper spindle options", NULL, Format_Bitfield, "Allow axis control,Sync position", NULL, NULL, Setting_IsExtended, &settings.stepper_spindle_flags.mask, NULL, NULL },
 };
 
-#ifndef NO_SETTINGS_DESCRIPTIONS
-
 PROGMEM static const setting_descr_t spindle_setting_descr[] = {
     { Setting_StepperSpindle_Options, "Allow axis control is for enabling axis motion commands when the spindle is stopped.\\n"
                                       "Sync position syncs the position within one turn of the spindle."
     }
 };
-
-#endif
 
 static void _settings_restore (void)
 {
@@ -301,10 +297,8 @@ void stepper_spindle_init (void)
         .is_core = true,
         .settings = spindle_setting_detail,
         .n_settings = sizeof(spindle_setting_detail) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
         .descriptions = spindle_setting_descr,
         .n_descriptions = sizeof(spindle_setting_descr) / sizeof(setting_descr_t),
-#endif
         .save = settings_write_global,
         .load = _settings_load,
         .restore = _settings_restore
@@ -322,6 +316,9 @@ void stepper_spindle_init (void)
             on_execute_delay = grbl.on_execute_delay;
             grbl.on_execute_delay = onExecuteDelay;
         }
+
+        hal.spindle_data.get = spindleGetData;
+        hal.spindle_data.reset = spindleDataReset;
 
         st2_motor_register_stopped_callback(motor, onSpindleStopped);
 
