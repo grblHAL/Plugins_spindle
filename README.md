@@ -126,4 +126,24 @@ the controlled point \(tooltip\) to the required position.
 > If laser mode is enabled by the `$32` setting it will only be honoured if the current spindle is a PWM spindle capable of laser mode.  
 
 ---
-2025-01-07
+
+### Spindle Offsets
+
+When operating a machine with multiple spindles or tools (e.g., a milling spindle and a separate laser module), it is often necessary to account for their physical offsets relative to each other. This plugin provides mechanisms to manage these offsets, ensuring that the commanded G-code positions correctly map to the active tool's focal point or tip.
+
+The core spindle control system automatically handles tool offsets when enabled and configured. Specifically, for non-default **laser spindles**, the following settings are available to define their X and Y positions relative to the primary spindle:
+
+*   **`$770` - Laser X Offset:** Defines the X-axis offset (in mm) of the laser's focal point from the primary spindle's center.
+*   **`$771` - Laser Y Offset:** Defines the Y-axis offset (in mm) of the laser's focal point from the primary spindle's center.
+*   **`$772` - Laser Offset Options (mask):** Configures how these offsets are applied, particularly affecting G92 work coordinate system updates to maintain consistent work position when switching between tools.
+
+| Bit | Value | Option                     | Description                                                                                             |
+|:---:|:-----:|:---------------------------|:--------------------------------------------------------------------------------------------------------|
+| 0   | 1     | Keep new position          | If set, when a laser spindle with an offset is activated, the machine's work position shifts by the offset amount, meaning the G-code continues from the laser's perspective. |
+| 1   | 2     | Update G92 on spindle change | If set, when a laser spindle with an offset is activated, the internal `G92` offset is adjusted to keep the **work position identical** from the original spindle's perspective. |
+
+> [!NOTE]
+> When switching between spindles, any offset between the spindles must be handled. This is typically managed automatically by the controller if laser offset settings are configured, or manually via G-code commands (e.g., `G10 L2 Pn` or `G92`) to apply an offset and move the controlled point (tooltip/focal point) to the required position.
+
+---
+2025-09-24
