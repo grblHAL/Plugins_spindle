@@ -47,9 +47,8 @@ typedef struct {
 
 static onoff_spindle_settings_t spindle_config, run;
 static spindle_state_t spindle_state = {0};
+static io_port_cfg_t d_out;
 static nvs_address_t nvs_address;
-static uint8_t n_dout;
-static char max_dport[4];
 
 // Start or stop spindle
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
@@ -59,7 +58,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     spindle_state = state;
 
 #if SPINDLE_ENABLE & (1<<SPINDLE_ONOFF1_DIR)
-    if(run.dir_port != 0xFF)
+    if(run.dir_port != IOPORT_UNASSIGNED)
         ioport_digital_out(run.dir_port, state.ccw);
 #endif
     ioport_digital_out(run.on_port, state.on);
@@ -96,7 +95,7 @@ static void onoff_spindle_register (void)
         .get_state = spindleGetState
     };
 
-    if((spindle_register(run.dir_port == 0xFF ? &spindle_on : &spindle_on_dir, "On/off spindle")) != -1)
+    if((spindle_register(run.dir_port == IOPORT_UNASSIGNED ? &spindle_on : &spindle_on_dir, "On/off spindle")) != -1)
         spindleSetState(NULL, spindle_state, 0.0f);
     else
         task_run_on_startup(report_warning, "On/off spindle failed to initialize!");
@@ -106,15 +105,14 @@ static status_code_t set_port (setting_id_t setting, float value)
 {
     status_code_t status;
 
-    if((status = isintf(value) ? Status_OK : Status_BadNumberFormat) == Status_OK)
-      switch(setting) {
+    switch(setting) {
 
         case Setting_Spindle_OnPort:
-            spindle_config.on_port = value < 0.0f ? 0xFF : (uint8_t)value;
+            status = d_out.set_value(&d_out, &spindle_config.on_port, (pin_cap_t){}, value);
             break;
 
         case Setting_Spindle_DirPort:
-            spindle_config.dir_port = value < 0.0f ? 0xFF : (uint8_t)value;
+            status = d_out.set_value(&d_out, &spindle_config.dir_port, (pin_cap_t){}, value);
             break;
 
         default:
@@ -131,11 +129,11 @@ static float get_port (setting_id_t setting)
     switch(setting) {
 
         case Setting_Spindle_OnPort:
-            value = spindle_config.on_port >= n_dout ? -1.0f : (float)spindle_config.on_port;
+            value = d_out.get_value(&d_out, spindle_config.on_port);
             break;
 
         case Setting_Spindle_DirPort:
-            value = spindle_config.dir_port >= n_dout ? -1.0f : (float)spindle_config.dir_port;
+            value = d_out.get_value(&d_out, spindle_config.dir_port);
             break;
 
         default:
@@ -146,20 +144,18 @@ static float get_port (setting_id_t setting)
 }
 
 static const setting_detail_t vfd_settings[] = {
-    { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } },
+    { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Decimal, "-#0", "-1", d_out.port_maxs, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } },
 #if ON_OFF_N_PORTS == 2
-    { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Decimal, "-#0", "-1", max_dport, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } }
+    { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Decimal, "-#0", "-1", d_out.port_maxs, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } }
 #endif
 };
 
-#ifndef NO_SETTINGS_DESCRIPTIONS
 static const setting_descr_t spindle_settings_descr[] = {
     { Setting_Spindle_OnPort, "On/off spindle on/off port. Set to -1 to disable." },
 #if ON_OFF_N_PORTS == 2
     { Setting_Spindle_DirPort, "On/off spindle direction port. Set to -1 to disable." }
 #endif
 };
-#endif
 
 static void spindle_settings_save (void)
 {
@@ -168,11 +164,11 @@ static void spindle_settings_save (void)
 
 static void spindle_settings_restore (void)
 {
-    spindle_config.on_port = n_dout - 1;
+    spindle_config.on_port = d_out.get_next(&d_out, IOPORT_UNASSIGNED, "Spindle on", (pin_cap_t){});
 #if ON_OFF_N_PORTS == 2
-    spindle_config.dir_port = n_dout > 1 ? n_dout - 2 : 0;
+    spindle_config.dir_port = d_out.get_next(&d_out, spindle_config.on_port, "Spindle on", (pin_cap_t){});
 #else
-    spindle_config.dir_port = 0xFF;
+    spindle_config.dir_port = IOPORT_UNASSIGNED;
 #endif
 
 
@@ -190,13 +186,12 @@ static void spindle_settings_load (void)
 #if ON_OFF_N_PORTS == 2
     run.dir_port = spindle_config.dir_port;
 #else
-    run.dir_port = 0xFF;
+    run.dir_port = IOPORT_UNASSIGNED;
 #endif
-    strcpy(max_dport, uitoa(max(n_dout, ioports_available(Port_Digital, Port_Output)) - 1));
 
-    ok = ioport_claim(Port_Digital, Port_Output, &run.on_port, "Spindle on");
+    ok = !!d_out.claim(&d_out, &run.on_port, "Spindle on", (pin_cap_t){});
 #if ON_OFF_N_PORTS == 2
-    ok = ok && (run.dir_port == 0xFF || ioport_claim(Port_Digital, Port_Output, &run.dir_port, "Spindle direction"));
+    ok = ok && !!d_out.claim(&d_out, &run.dir_port, "Spindle direction", (pin_cap_t){});
 #endif
     if(ok)
         onoff_spindle_register();
@@ -209,18 +204,15 @@ void onoff_spindle_init (void)
     static setting_details_t vfd_setting_details = {
         .settings = vfd_settings,
         .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
-    #ifndef NO_SETTINGS_DESCRIPTIONS
         .descriptions = spindle_settings_descr,
         .n_descriptions = sizeof(spindle_settings_descr) / sizeof(setting_descr_t),
-    #endif
         .load = spindle_settings_load,
         .restore = spindle_settings_restore,
         .save = spindle_settings_save
     };
 
-    if((n_dout = ioports_available(Port_Digital, Port_Input)) >= ON_OFF_N_PORTS &&
-         ioport_can_claim_explicit() &&
-          (nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t))))
+    if(ioports_cfg(&d_out, Port_Digital, Port_Output)->n_ports >= ON_OFF_N_PORTS &&
+       (nvs_address = nvs_alloc(sizeof(onoff_spindle_settings_t))))
         settings_register(&vfd_setting_details);
     else
         task_run_on_startup(report_warning, "On/off spindle failed to initialize!");
