@@ -4,6 +4,7 @@ target_sources(spindle INTERFACE
  ${CMAKE_CURRENT_LIST_DIR}/select.c
  ${CMAKE_CURRENT_LIST_DIR}/offset.c
  ${CMAKE_CURRENT_LIST_DIR}/onoff.c
+ ${CMAKE_CURRENT_LIST_DIR}/pwm.c
  ${CMAKE_CURRENT_LIST_DIR}/pwm_clone.c
  ${CMAKE_CURRENT_LIST_DIR}/stepper.c
  ${CMAKE_CURRENT_LIST_DIR}/vfd/spindle.c
