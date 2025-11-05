@@ -272,7 +272,7 @@ static void _settings_load (void)
 
 void stepper_spindle_init (void)
 {
-    static const spindle_ptrs_t spindle = {
+    PROGMEM static const spindle_ptrs_t spindle = {
         .type = SpindleType_Stepper,
         .ref_id = SPINDLE_STEPPER,
         .cap = {
