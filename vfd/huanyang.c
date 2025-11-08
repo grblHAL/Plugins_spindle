@@ -279,8 +279,10 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+    if(!((vfd_response_t)context == VFD_GetRPM || (vfd_response_t)context == VFD_GetAmps) || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL) {
+        exceptions = 0;
         vfd_failed(false);
+    }
 }
 
 static void onReportOptions (bool newopt)
@@ -288,7 +290,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.15");
+        report_plugin("HUANYANG VFD", "0.16");
 }
 
 static void after_reset (void *data)

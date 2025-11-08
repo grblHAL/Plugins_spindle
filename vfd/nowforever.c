@@ -222,8 +222,10 @@ static void rx_packet (modbus_message_t *msg)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL) {
+        exceptions = 0;
         vfd_failed(false);
+    }
 }
 
 static void onReportOptions (bool newopt)
@@ -231,7 +233,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Nowforever VFD", "0.03");
+        report_plugin("Nowforever VFD", "0.04");
 }
 
 static void onDriverReset (void)

@@ -184,8 +184,10 @@ static void rx_packet (modbus_message_t *msg)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL) {
+        exceptions = 0;
         vfd_failed(false);
+    }
 }
 
 void onReportOptions (bool newopt)
@@ -193,7 +195,7 @@ void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Durapulse VFD GS20", "v0.07");
+        report_plugin("Durapulse VFD GS20", "v0.08");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

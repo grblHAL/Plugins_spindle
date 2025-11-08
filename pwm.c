@@ -110,7 +110,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
     return true;
 }
 
-static const spindle_ptrs_t spindle = {
+PROGMEM static const spindle_ptrs_t spindle = {
     .type = SpindleType_PWM,
     .ref_id = SPINDLE_PWM2,
     .cap = {

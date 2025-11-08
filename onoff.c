@@ -74,7 +74,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
 static void onoff_spindle_register (void)
 {
-    static const spindle_ptrs_t spindle_on = {
+    PROGMEM static const spindle_ptrs_t spindle_on = {
         .type = SpindleType_Basic,
         .ref_id = SPINDLE_ONOFF1,
         .cap = {
@@ -84,7 +84,7 @@ static void onoff_spindle_register (void)
         .get_state = spindleGetState
     };
 
-    static const spindle_ptrs_t spindle_on_dir = {
+    PROGMEM static const spindle_ptrs_t spindle_on_dir = {
         .type = SpindleType_Basic,
         .ref_id = SPINDLE_ONOFF1_DIR,
         .cap = {
@@ -143,14 +143,14 @@ static float get_port (setting_id_t setting)
     return value;
 }
 
-static const setting_detail_t vfd_settings[] = {
+PROGMEM static const setting_detail_t vfd_settings[] = {
     { Setting_Spindle_OnPort, Group_AuxPorts, "Spindle on port", NULL, Format_Decimal, "-#0", "-1", d_out.port_maxs, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } },
 #if ON_OFF_N_PORTS == 2
     { Setting_Spindle_DirPort, Group_AuxPorts, "Spindle dir port", NULL, Format_Decimal, "-#0", "-1", d_out.port_maxs, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } }
 #endif
 };
 
-static const setting_descr_t spindle_settings_descr[] = {
+PROGMEM static const setting_descr_t spindle_settings_descr[] = {
     { Setting_Spindle_OnPort, "On/off spindle on/off port. Set to -1 to disable." },
 #if ON_OFF_N_PORTS == 2
     { Setting_Spindle_DirPort, "On/off spindle direction port. Set to -1 to disable." }

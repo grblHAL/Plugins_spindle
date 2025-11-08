@@ -225,11 +225,11 @@ static bool is_ysgl_selected (const setting_detail_t *setting, uint_fast16_t off
 
 #endif // SPINDLE_GS20|SPINDLE_YL620A
 
-static const setting_group_detail_t vfd_groups [] = {
+PROGMEM static const setting_group_detail_t vfd_groups [] = {
     { Group_Root, Group_VFD, "VFD" }
 };
 
-static const setting_detail_t vfd_settings[] = {
+PROGMEM static const setting_detail_t vfd_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
      { Setting_VFD_ModbusAddress, Group_VFD, "", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[0], NULL, is_vfd_spindle, { .hidden = On } },
      { Setting_VFD_ModbusAddress0, Group_VFD, "Spindle 1 ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address[0], NULL, is_vfd_spindle },
@@ -260,8 +260,7 @@ static const setting_detail_t vfd_settings[] = {
 #endif
 };
 
-#ifndef NO_SETTINGS_DESCRIPTIONS
-static const setting_descr_t vfd_settings_descr[] = {
+PROGMEM static const setting_descr_t vfd_settings_descr[] = {
 #if N_SPINDLE_SELECTABLE > 1
     { Setting_VFD_ModbusAddress0, "Spindle 1 (default spindle) VFD ModBus address" },
     { Setting_VFD_ModbusAddress1, "Spindle 2 ModBus address" },
@@ -290,7 +289,6 @@ static const setting_descr_t vfd_settings_descr[] = {
     { Setting_VFD_19, "MODVFD RPM value divider for reading RPM" },
 #endif
 };
-#endif
 
 static void vfd_settings_save (void)
 {
@@ -353,7 +351,7 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
 
 static void raise_alarm (void *data)
 {
-    system_raise_alarm(Alarm_Spindle);
+    system_raise_alarm(Alarm_ModbusException);
 }
 
 // Alarm needs to be raised directly to correctly handle an error during reset (the rt command queue is
@@ -365,7 +363,7 @@ bool vfd_failed (bool disable)
     if(sys.cold_start)
         task_add_immediate(raise_alarm, NULL);
     else
-        system_raise_alarm(Alarm_Spindle);
+        system_raise_alarm(Alarm_ModbusException);
 
     if(disable && (ok = spindle_select(spindle_add_null())))
         task_add_immediate(report_warning, "VFD spindle has been disabled!");
@@ -385,10 +383,8 @@ void vfd_init (void)
         .n_groups = sizeof(vfd_groups) / sizeof(setting_group_detail_t),
         .settings = vfd_settings,
         .n_settings = sizeof(vfd_settings) / sizeof(setting_detail_t),
-    #ifndef NO_SETTINGS_DESCRIPTIONS
         .descriptions = vfd_settings_descr,
         .n_descriptions = sizeof(vfd_settings_descr) / sizeof(setting_descr_t),
-    #endif
         .load = vfd_settings_load,
         .restore = vfd_settings_restore,
         .save = vfd_settings_save

@@ -117,13 +117,13 @@ static uint32_t get_options (setting_id_t id)
     return (uint32_t)settings.pwm_spindle.flags.g92offset;
 }
 
-static const setting_detail_t offset_settings[] = {
+PROGMEM static const setting_detail_t offset_settings[] = {
     { Setting_SpindleOffsetX, Group_Spindle, "Laser X offset", "mm", Format_Decimal, "-##0.000", "-1000", NULL, Setting_IsExtended, &plugin_settings.offset[0].x, NULL, is_setting_available },
     { Setting_SpindleOffsetY, Group_Spindle, "Laser Y offset", "mm", Format_Decimal, "-##0.000", "-1000", NULL, Setting_IsExtended, &plugin_settings.offset[0].y, NULL, is_setting_available },
     { Setting_SpindleOffsetOptions, Group_Spindle, "Laser offset options", NULL, Format_RadioButtons, "Keep new position,Update G92 on spindle change", NULL, NULL, Setting_IsExtendedFn, set_options, get_options, is_setting_available },
 };
 
-static const setting_descr_t offset_settings_descr[] = {
+PROGMEM static const setting_descr_t offset_settings_descr[] = {
     { Setting_SpindleOffsetX, "X offset from current position for non-default laser spindle." },
     { Setting_SpindleOffsetY, "Y offset from current position for non-default laser spindle." },
     { Setting_SpindleOffsetOptions, "If update G92 offset is enabled then it is adjusted to keep the work position identical for the spindles." }

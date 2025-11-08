@@ -199,7 +199,7 @@ static uint32_t get_int (setting_id_t id)
     return get_spindle_id(spindle_setting[id - Setting_SpindleEnableBase].ref_id) + 1;
 }
 
-static const setting_detail_t spindle_settings[] = {
+PROGMEM static const setting_detail_t spindle_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
     { Setting_SpindleEnableBase, Group_Spindle, "Spindle ?", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, SETTING_OPTS },
 #endif
@@ -208,13 +208,13 @@ static const setting_detail_t spindle_settings[] = {
 #endif // N_SYS_SPINDLE
 };
 
-static const setting_descr_t spindle_settings_descr[] = {
+PROGMEM static const setting_descr_t spindle_settings_descr[] = {
 #if N_SPINDLE_SELECTABLE > 1
     { Setting_SpindleEnableBase, NULL },
 #endif
 #if N_SYS_SPINDLE == 1
     { Setting_SpindleToolStartBase, "Start of tool numbers for selecting the spindle.\\n"
-                                 "Normally leave this at 0 for spindle 1 (default spindle)."
+                                    "Normally leave this at 0 for spindle 1 (default spindle)."
     }
 #endif // N_SYS_SPINDLE
 };

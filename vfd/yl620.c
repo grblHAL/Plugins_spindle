@@ -229,8 +229,10 @@ static void rx_packet (modbus_message_t *msg)
 
 static void rx_exception (uint8_t code, void *context)
 {
-    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL)
+    if((vfd_response_t)context != VFD_GetRPM || ++exceptions == VFD_ASYNC_EXCEPTION_LEVEL) {
+        exceptions = 0;
         vfd_failed(false);
+    }
 }
 
 static void onReportOptions (bool newopt)
@@ -238,7 +240,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Yalang VFD YL620A", "0.04");
+        report_plugin("Yalang VFD YL620A", "0.05");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
