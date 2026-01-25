@@ -41,18 +41,21 @@
 #define VFD_ADDRESS 1
 #endif
 
+#ifndef VFD_QUERY_INTERVAL
+#define VFD_QUERY_INTERVAL 150 // ms
+#endif
+
 typedef struct {
     spindle_id_t id;
-    const vfd_spindle_ptrs_t *vfd;
+    vfd_spindle_ptrs_t hal;
 } vfd_spindle_t;
 
 static uint8_t n_spindle = 0;
 static bool spindle_changed = false;
-static spindle_id_t vfd_active = -1;
-static vfd_ptrs_t vfd_spindle = {0};
-static vfd_spindle_t vfd_spindles[N_SPINDLE];
+static vfd_spindle_t vfd_spindle = {0}, vfd_spindles[N_SPINDLE];
 static nvs_address_t nvs_address = 0;
 
+static on_spindle_select_ptr on_spindle_select;
 static on_spindle_selected_ptr on_spindle_selected;
 static on_realtime_report_ptr on_realtime_report = NULL;
 
@@ -61,17 +64,23 @@ vfd_settings_t vfd_config;
 static void vfd_realtime_report (stream_write_ptr stream_write, report_tracking_flags_t report)
 {
     static float load = -1.0f;
+    static uint32_t last_request;
 
     if(on_realtime_report)
         on_realtime_report(stream_write, report);
 
-    if(vfd_spindle.get_load) {
-        float new_load = vfd_spindle.get_load();
-        if(load != new_load || spindle_changed || report.all) {
-            load = new_load;
-            spindle_changed = false;
-            stream_write("|Sl:");
-            stream_write(ftoa(load, 1));
+    if(vfd_spindle.hal.vfd.get_load) {
+
+        uint32_t ms = hal.get_elapsed_ticks();
+
+        if((ms = hal.get_elapsed_ticks()) - last_request >= VFD_QUERY_INTERVAL) {
+            float new_load = vfd_spindle.hal.vfd.get_load();
+            if(load != new_load || spindle_changed || report.all) {
+                load = new_load;
+                spindle_changed = false;
+                stream_write("|Sl:");
+                stream_write(ftoa(load, 1));
+            }
         }
     }
 }
@@ -90,7 +99,7 @@ spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name)
     if(n_spindle < N_SPINDLE && (spindle_id = spindle_register(&vfd->spindle, name)) != -1) {
 
         vfd_spindles[n_spindle].id = spindle_id;
-        vfd_spindles[n_spindle++].vfd = vfd;
+        memcpy(&vfd_spindles[n_spindle++].hal, vfd, sizeof(vfd_spindle_ptrs_t));
 #ifdef GRBL_ESP32
         spindle_get_hal(spindle_id, SpindleHAL_Configured)->esp32_off = esp32_spindle_off;
 #endif
@@ -328,22 +337,60 @@ static void vfd_settings_load (void)
         vfd_settings_restore();
 }
 
-static void vfd_spindle_selected (spindle_ptrs_t *spindle)
+static vfd_spindle_t *get_spindle (spindle_id_t spindle_id)
 {
     uint_fast8_t idx = n_spindle;
 
-    vfd_active = -1;
-    spindle_changed = true;
+    vfd_spindle_t *spindle = NULL;
 
-    memset(&vfd_spindle, 0, sizeof(vfd_ptrs_t));
     if(n_spindle) do {
-        if(vfd_spindles[--idx].id == spindle->id) {
-            modbus_flush_queue();
-            vfd_active = spindle->id;
-            memcpy(&vfd_spindle, &vfd_spindles[idx].vfd->vfd, sizeof(vfd_ptrs_t));
-            break;
-        }
-    } while(idx);
+        if(vfd_spindles[--idx].id == spindle_id)
+            spindle = &vfd_spindles[idx];
+    } while(idx && spindle == NULL);
+
+    return spindle;
+}
+
+// Returns spindle state in a spindle_state_t variable.
+// Caps request interval to once every VFD_QUERY_INTERVAL ms max (default 150).
+static spindle_state_t vfd_get_state (spindle_ptrs_t *spindle)
+{
+    static uint32_t last_request;
+    static spindle_state_t state = (spindle_state_t){0};
+
+    uint32_t ms = hal.get_elapsed_ticks();
+
+    if((ms = hal.get_elapsed_ticks()) - last_request >= VFD_QUERY_INTERVAL) {
+        state = vfd_spindle.hal.spindle.get_state(spindle);
+        last_request = ms;
+    }
+
+    return state;
+}
+
+static bool vfd_spindle_select (spindle_ptrs_t *spindle)
+{
+    bool ok = on_spindle_select == NULL || on_spindle_select(spindle);
+
+    if(ok && get_spindle(spindle->id))
+        spindle->get_state = vfd_get_state;
+
+    return ok;
+}
+
+static void vfd_spindle_selected (spindle_ptrs_t *spindle)
+{
+    vfd_spindle_t *vfd;
+
+    spindle_changed = true;
+    vfd_spindle.id = -1;
+    memset(&vfd_spindle.hal, 0, sizeof(vfd_spindle_ptrs_t));
+
+    if((vfd = get_spindle(spindle->id))) {
+        modbus_flush_queue();
+        vfd_spindle.id = spindle->id;
+        memcpy(&vfd_spindle.hal, &vfd->hal, sizeof(vfd_spindle_ptrs_t));
+    };
 
     if(on_spindle_selected)
         on_spindle_selected(spindle);
@@ -373,7 +420,7 @@ bool vfd_failed (bool disable)
 
 const vfd_ptrs_t *vfd_get_active (void)
 {
-    return &vfd_spindle;
+    return vfd_spindle.id == -1 ? NULL : &vfd_spindle.hal.vfd;
 }
 
 void vfd_init (void)
@@ -429,9 +476,12 @@ void vfd_init (void)
         vfd_nowforever_init();
 #endif
 
+        on_spindle_select = grbl.on_spindle_select;
+        grbl.on_spindle_select = vfd_spindle_select;
+
         on_spindle_selected = grbl.on_spindle_selected;
         grbl.on_spindle_selected = vfd_spindle_selected;
     }
 }
 
-#endif
+#endif // VFD_ENABLE
