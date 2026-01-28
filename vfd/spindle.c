@@ -5,7 +5,7 @@
   Part of grblHAL
 
   Copyright (c) 2022 Andrew Marles
-  Copyright (c) 2022-2025 Terje Io
+  Copyright (c) 2022-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ static void vfd_realtime_report (stream_write_ptr stream_write, report_tracking_
 #ifdef GRBL_ESP32
 static void esp32_spindle_off (spindle_ptrs_t *spindle)
 {
-    spindle_get_hal(vfd_active, SpindleHAL_Active)->set_state(spindle, (spindle_state_t){0}, 0.0f);
+    spindle_get_hal(spindle->id, SpindleHAL_Active)->set_state(spindle, (spindle_state_t){0}, 0.0f);
 }
 #endif
 
