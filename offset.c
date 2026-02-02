@@ -82,8 +82,8 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 
                 if(settings.pwm_spindle.flags.g92offset) {
 
-                    gc_state.g92_coord_offset[0] += plugin_settings.offset[0].x * (laser_spindle_id == -1 ? -1.0f : 1.0f);
-                    gc_state.g92_coord_offset[1] += plugin_settings.offset[0].y * (laser_spindle_id == -1 ? -1.0f : 1.0f);
+                    gc_state.g92_offset.coord.values[0] += plugin_settings.offset[0].x * (laser_spindle_id == -1 ? -1.0f : 1.0f);
+                    gc_state.g92_offset.coord.values[1] += plugin_settings.offset[0].y * (laser_spindle_id == -1 ? -1.0f : 1.0f);
 
     // save?                if(!settings.flags.g92_is_volatile)
     //                    settings_write_coord_data(CoordinateSystem_G92, &gc_state.g92_coord_offset); // Save G92 offsets to non-volatile storage
@@ -152,7 +152,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Spindle offset", "0.03");
+        report_plugin("Spindle offset", "0.04");
 }
 
 void spindle_offset_init (void)
