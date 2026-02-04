@@ -5,7 +5,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2025 Terje Io
+  Copyright (c) 2023-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
 
     if(config_ok) {
         spindle->set_state(NULL, (spindle_state_t){0}, 0.0f);
-        system_add_rt_report(Report_Spindle);
+        report_add_realtime(Report_Spindle);
     } else
         config_ok = true;
 
