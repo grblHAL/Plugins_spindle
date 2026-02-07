@@ -290,7 +290,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.16");
+        report_plugin("HUANYANG VFD", "0.17");
 }
 
 static void after_reset (void *data)
@@ -311,10 +311,8 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 {
     if(spindle->id == spindle_id) {
 
-        spindle_hal = spindle;
         spindle_data.rpm_programmed = -1.0f;
-        spindle_data.at_speed_enabled = settings.spindle.at_speed_tolerance >= 0.0f;
-        spindle->at_speed_tolerance = settings.spindle.at_speed_tolerance;
+        vfd_atspeed_configure((spindle_hal = spindle), &spindle_data);
 
         modbus_set_silence(&silence);
         modbus_address = vfd_get_modbus_address(spindle_id);
@@ -333,13 +331,8 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
 {
     settings_changed(settings, changed);
 
-    if(changed.spindle) {
-
-        spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
-
-        spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
-        spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
-    }
+    if(changed.spindle)
+        spindle_get_hal(spindle_id, SpindleHAL_Configured)->at_speed_tolerance = vfd_atspeed_configure(spindle_hal, &spindle_data);
 }
 
 void vfd_huanyang_init (void)

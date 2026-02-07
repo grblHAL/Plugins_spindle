@@ -5,7 +5,7 @@
   Part of grblHAL
 
   Copyright (c) 2022 Andrew Marles
-  Copyright (c) 2022-2025 Terje Io
+  Copyright (c) 2022-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -95,5 +95,6 @@ spindle_id_t vfd_register (const vfd_spindle_ptrs_t *vfd, const char *name);
 const vfd_ptrs_t *vfd_get_active (void);
 bool vfd_failed (bool disable);
 uint32_t vfd_get_modbus_address (spindle_id_t spindle_id);
+float vfd_atspeed_configure (spindle_ptrs_t *spindle, spindle_data_t *spindle_data);
 
 #endif

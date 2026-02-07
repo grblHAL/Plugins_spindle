@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2025 Terje Io
+  Copyright (c) 2023-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -225,7 +225,7 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
         spindle->rpm_min = 0.0f;
         spindle->rpm_max = settings->axis[axis_idx].max_rate;
         spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
-        spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
+        spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance > 0.0f;
 
         if((spindle_hal = spindle_get_hal(spindle_id, SpindleHAL_Active))) {
             spindle_hal->rpm_min = spindle->rpm_min;

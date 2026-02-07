@@ -423,6 +423,16 @@ const vfd_ptrs_t *vfd_get_active (void)
     return vfd_spindle.id == -1 ? NULL : &vfd_spindle.hal.vfd;
 }
 
+float vfd_atspeed_configure (spindle_ptrs_t *spindle, spindle_data_t *spindle_data)
+{
+    spindle_data->at_speed_enabled = settings.spindle.at_speed_tolerance > 0.0f;
+
+    if(spindle)
+        spindle->at_speed_tolerance = settings.spindle.at_speed_tolerance;
+
+    return settings.spindle.at_speed_tolerance;
+}
+
 void vfd_init (void)
 {
     static setting_details_t vfd_setting_details = {

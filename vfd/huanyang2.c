@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2025 Terje Io
+  Copyright (c) 2020-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -215,7 +215,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG P2A VFD", "0.14");
+        report_plugin("HUANYANG P2A VFD", "0.15");
 }
 
 static void onDriverReset (void)
@@ -230,8 +230,8 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 {
     if(spindle->id == spindle_id) {
 
-        spindle_hal = spindle;
         spindle_data.rpm_programmed = -1.0f;
+        vfd_atspeed_configure((spindle_hal = spindle), &spindle_data);
 
         modbus_address = vfd_get_modbus_address(spindle_id);
 
@@ -248,13 +248,8 @@ static void settingsChanged (settings_t *settings, settings_changed_flags_t chan
 {
     settings_changed(settings, changed);
 
-    if(changed.spindle) {
-
-        spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
-
-        spindle->at_speed_tolerance = settings->spindle.at_speed_tolerance;
-        spindle_data.at_speed_enabled = settings->spindle.at_speed_tolerance >= 0.0f;
-    }
+    if(changed.spindle)
+        spindle_get_hal(spindle_id, SpindleHAL_Configured)->at_speed_tolerance = vfd_atspeed_configure(spindle_hal, &spindle_data);
 }
 
 void vfd_huanyang2_init (void)
