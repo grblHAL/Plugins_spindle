@@ -59,6 +59,11 @@ typedef enum {
     VFD_GetAmps
 } vfd_response_t;
 
+typedef enum {
+    VFD_NotReady = 0, // Must be 0
+    VFD_Ready,
+} vfd_state_t;
+
 typedef struct {
 #if N_SPINDLE > 1 || N_SYS_SPINDLE > 1
     uint8_t modbus_address[VFD_N_ADRESSES];

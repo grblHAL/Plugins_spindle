@@ -36,8 +36,10 @@
 static uint32_t modbus_address, exceptions = 0;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal;
-static spindle_state_t vfd_state = {0};
+static spindle_state_t spindle_state = {0};
 static spindle_data_t spindle_data = {0};
+static vfd_state_t vfd_state;
+
 static on_spindle_selected_ptr on_spindle_selected;
 static on_report_options_ptr on_report_options;
 static settings_changed_ptr settings_changed;
@@ -126,11 +128,11 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
     busy = true;
 
-    if(vfd_state.ccw != state.ccw)
+    if(spindle_state.ccw != state.ccw)
         spindle_data.rpm_programmed = -1.0f;
 
-    vfd_state.on = spindle_data.state_programmed.on = state.on;
-    vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
+    spindle_state.on = spindle_data.state_programmed.on = state.on;
+    spindle_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
         set_rpm(rpm, true);
@@ -148,6 +150,9 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
     UNUSED(spindle);
 
+    if(vfd_state != VFD_Ready)
+        return spindle_state;
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -163,9 +168,9 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
-    vfd_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
+    spindle_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
 
-    return vfd_state; // return previous state as we do not want to wait for the response
+    return spindle_state; // return previous state as we do not want to wait for the response
 }
 
 static float f2rpm (uint16_t f)
@@ -178,6 +183,10 @@ static void rx_packet (modbus_message_t *msg)
     if(!(msg->adu[0] & 0x80)) {
 
         switch((vfd_response_t)msg->context) {
+
+            case VFD_SetStatus:
+                vfd_state = VFD_Ready;
+                break;
 
             case VFD_GetRPM:
                 exceptions = 0;
@@ -208,7 +217,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("MODVFD", "0.07");
+        report_plugin("MODVFD", "0.08");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

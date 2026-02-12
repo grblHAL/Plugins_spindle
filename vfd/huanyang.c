@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2024 Terje Io
+  Copyright (c) 2020-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -34,8 +34,10 @@ static uint32_t modbus_address, exceptions = 0;
 static float amps = 0.0f, amps_max = 0.0f, rpm_at_50Hz = 0.0f;
 static spindle_id_t spindle_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
-static spindle_state_t vfd_state = {0};
+static spindle_state_t spindle_state = {0};
 static spindle_data_t spindle_data = {0};
+static vfd_state_t vfd_state;
+
 static on_report_options_ptr on_report_options;
 static on_spindle_selected_ptr on_spindle_selected;
 static settings_changed_ptr settings_changed;
@@ -64,7 +66,7 @@ static const modbus_callbacks_t callbacks = {
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
-static void spindleGetRPMLimits (void)
+static void get_rpm_range (void)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetRPMAt50Hz,
@@ -97,7 +99,7 @@ static void spindleGetRPMLimits (void)
 }
 
 // Read maximum configured current from spindle, value is used later for calculating spindle load
-static void spindleGetMaxAmps (void)
+static void get_max_amps (void)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetMaxAmps,
@@ -162,6 +164,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     if(busy)
         return;
 
+    if(state.on && vfd_state != VFD_Ready)
+        get_rpm_range();
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
@@ -175,11 +180,11 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
     busy = true;
 
-    if(vfd_state.ccw != state.ccw)
+    if(spindle_state.ccw != state.ccw)
         spindle_data.rpm_programmed = -1.0f;
 
-    vfd_state.on = spindle_data.state_programmed.on = state.on;
-    vfd_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
+    spindle_state.on = spindle_data.state_programmed.on = state.on;
+    spindle_state.ccw = spindle_data.state_programmed.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
         set_rpm(rpm, true);
@@ -190,6 +195,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
+    if(vfd_state != VFD_Ready)
+        return spindle_state;
+
     modbus_message_t rpm_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -213,11 +221,12 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
         .tx_length = 8,
         .rx_length = 8
     };
+
     modbus_send(&amps_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
-    vfd_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
+    spindle_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
 
-    return vfd_state; // return previous state as we do not want to wait for the response
+    return spindle_state; // return previous state as we do not want to wait for the response
 }
 
 static void rx_packet (modbus_message_t *msg)
@@ -241,6 +250,7 @@ static void rx_packet (modbus_message_t *msg)
                     spindle_hal->cap.rpm_range_locked = On;
                     spindle_hal->rpm_max = (float)((msg->adu[4] << 8) | msg->adu[5]) * rpm_at_50Hz / 5000.0f;
                 }
+                vfd_state = VFD_Ready;
                 break;
 
             case VFD_GetRPMAt50Hz:
@@ -290,13 +300,13 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.17");
+        report_plugin("HUANYANG VFD", "0.18");
 }
 
 static void after_reset (void *data)
 {
-    spindleGetRPMLimits();
-    spindleGetMaxAmps();
+    get_rpm_range();
+    get_max_amps();
 }
 
 static void onDriverReset (void)
@@ -317,8 +327,8 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         modbus_set_silence(&silence);
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetRPMLimits();
-        spindleGetMaxAmps();
+        get_rpm_range();
+        get_max_amps();
 
     } else
         spindle_hal = NULL;

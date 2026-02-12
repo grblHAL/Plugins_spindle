@@ -36,7 +36,9 @@ static uint32_t modbus_address, freq_min = 0, freq_max = 0, exceptions = 0;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_data_t spindle_data = {0};
-static spindle_state_t vfd_state = {0};
+static spindle_state_t spindle_state = {0};
+static vfd_state_t vfd_state;
+
 static on_report_options_ptr on_report_options;
 static on_spindle_selected_ptr on_spindle_selected;
 static settings_changed_ptr settings_changed;
@@ -59,7 +61,7 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
 
 // Read maximum configured RPM from spindle, value is used later for calculating current RPM
 // In the case of the original Huanyang protocol, the value is the configured RPM at 50Hz
-static void spindleGetRPMRange (void *data)
+static void get_rpm_range (void *data)
 {
     modbus_message_t cmd = {
         .context = (void *)VFD_GetRPMRange,
@@ -129,6 +131,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     if(busy)
         return;
 
+    if(state.on && vfd_state != VFD_Ready)
+        get_rpm_range(NULL);
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_SetStatus,
         .crc_check = false,
@@ -147,11 +152,11 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 
     busy = true;
 
-    if(vfd_state.ccw != state.ccw)
+    if(spindle_state.ccw != state.ccw)
         spindle_data.rpm_programmed = 0.0f;
 
-    vfd_state.on = state.on;
-    vfd_state.ccw = state.ccw;
+    spindle_state.on = state.on;
+    spindle_state.ccw = state.ccw;
 
     if(modbus_send(&mode_cmd, &callbacks, true))
         set_rpm(rpm, true);
@@ -162,6 +167,9 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
+    if(vfd_state != VFD_Ready)
+        return spindle_state;
+
     modbus_message_t mode_cmd = {
         .context = (void *)VFD_GetRPM,
         .crc_check = false,
@@ -177,9 +185,9 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
     modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
 
-    vfd_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
+    spindle_state.at_speed = spindle->get_data(SpindleData_AtSpeed)->state_programmed.at_speed;
 
-    return vfd_state; // return previous state as we do not want to wait for the response
+    return spindle_state; // return previous state as we do not want to wait for the response
 }
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
@@ -212,6 +220,7 @@ static void rx_packet (modbus_message_t *msg)
                     spindle_hal->rpm_min = f2rpm(freq_min);
                     spindle_hal->rpm_max = f2rpm(freq_max);
                 }
+                vfd_state = VFD_Ready;
                 break;
 
             default:
@@ -233,7 +242,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Nowforever VFD", "0.05");
+        report_plugin("Nowforever VFD", "0.07");
 }
 
 static void onDriverReset (void)
@@ -241,7 +250,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        task_add_delayed(spindleGetRPMRange, NULL, 50);
+        task_add_delayed(get_rpm_range, NULL, 50);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
@@ -254,7 +263,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         modbus_set_silence(NULL);
         modbus_address = vfd_get_modbus_address(spindle_id);
 
-        spindleGetRPMRange(NULL);
+        get_rpm_range(NULL);
 
     } else
         spindle_hal = NULL;
