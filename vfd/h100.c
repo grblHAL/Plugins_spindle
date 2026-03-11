@@ -234,7 +234,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("H-100 VFD", "0.09");
+        report_plugin("H-100 VFD", "0.10");
 }
 
 static void onDriverReset (void)
@@ -242,7 +242,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        task_add_delayed(get_rpm_range, NULL, 200);
+        task_run_on_reset(get_rpm_range, NULL);
 }
 
 static bool spindleConfig (spindle_ptrs_t *spindle)

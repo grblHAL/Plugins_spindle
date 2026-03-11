@@ -242,7 +242,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Nowforever VFD", "0.07");
+        report_plugin("Nowforever VFD", "0.08");
 }
 
 static void onDriverReset (void)
@@ -250,7 +250,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        task_add_delayed(get_rpm_range, NULL, 50);
+        task_run_on_reset(get_rpm_range, NULL);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

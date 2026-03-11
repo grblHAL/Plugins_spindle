@@ -300,7 +300,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG VFD", "0.18");
+        report_plugin("HUANYANG VFD", "0.19");
 }
 
 static void after_reset (void *data)
@@ -314,7 +314,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        task_add_delayed(after_reset, NULL, 50);
+        task_run_on_reset(after_reset, NULL);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

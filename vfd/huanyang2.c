@@ -224,7 +224,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("HUANYANG P2A VFD", "0.16");
+        report_plugin("HUANYANG P2A VFD", "0.17");
 }
 
 static void onDriverReset (void)
@@ -232,7 +232,7 @@ static void onDriverReset (void)
     driver_reset();
 
     if(spindle_hal)
-        task_add_delayed(get_rpm_max, NULL, 50);
+        task_run_on_reset(get_rpm_max, NULL);
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

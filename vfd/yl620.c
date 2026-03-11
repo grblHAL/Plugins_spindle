@@ -43,6 +43,8 @@
     Holding register address                Description
     ---------------------------------------------------------------------------
     0x0000                                  main frequency
+    0x0005                                  min frequency?
+    0x0009                                  max frequency?
     0x0308                                  frequency given lower limit
     0x2000                                  command register (further information below)
     0x2001                                  Modbus485 frequency command (x0.1Hz => 2500 = 250.0Hz)
