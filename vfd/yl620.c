@@ -215,7 +215,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
 static void rx_packet (modbus_message_t *msg)
 {
-    if(!(msg->adu[0] & 0x80)) {
+    if(spindle_hal && !(msg->adu[0] & 0x80)) {
 
         switch((vfd_response_t)msg->context) {
 
@@ -247,7 +247,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Yalang VFD YL620A", "0.07");
+        report_plugin("Yalang VFD YL620A", "0.08");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

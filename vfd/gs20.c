@@ -168,7 +168,7 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 
 static void rx_packet (modbus_message_t *msg)
 {
-    if(!(msg->adu[0] & 0x80)) {
+    if(spindle_hal && !(msg->adu[0] & 0x80)) {
 
         switch((vfd_response_t)msg->context) {
 
@@ -200,7 +200,7 @@ void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Durapulse VFD GS20", "v0.10");
+        report_plugin("Durapulse VFD GS20", "v0.11");
 }
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)

@@ -202,7 +202,7 @@ static inline float f2rpm (uint16_t f)
 
 static void rx_packet (modbus_message_t *msg)
 {
-    if(!(msg->adu[0] & 0x80)) {
+    if(spindle_hal && !(msg->adu[0] & 0x80)) {
 
         switch((vfd_response_t)msg->context) {
 
@@ -242,7 +242,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Nowforever VFD", "0.08");
+        report_plugin("Nowforever VFD", "0.09");
 }
 
 static void onDriverReset (void)
