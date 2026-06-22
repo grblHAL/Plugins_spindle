@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2022-2025 Terje Io
+  Copyright (c) 2022-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -296,17 +296,17 @@ static void spindle_settings_restore (void)
             case 0:
 //                spd.ref_id = settings.spindle.flags.type;
                 break;
-#if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE2)
+#if N_SPINDLE_SELECTABLE > 1 && defined(DEFAULT_SPINDLE2) && DEFAULT_SPINDLE2 <= SPINDLE_REFID_MAX && (SPINDLE_ENABLE & (1 << DEFAULT_SPINDLE2))
             case 1:
                 spd.ref_id = DEFAULT_SPINDLE2;
                 break;
 #endif
-#if N_SPINDLE_SELECTABLE > 2 && defined(DEFAULT_SPINDLE3)
+#if N_SPINDLE_SELECTABLE > 2 && defined(DEFAULT_SPINDLE3) && DEFAULT_SPINDLE3 <= SPINDLE_REFID_MAX && (SPINDLE_ENABLE & (1 << DEFAULT_SPINDLE3))
             case 2:
                 spd.ref_id = DEFAULT_SPINDLE3;
                 break;
 #endif
-#if N_SPINDLE_SELECTABLE > 3 && defined(DEFAULT_SPINDLE4)
+#if N_SPINDLE_SELECTABLE > 3 && defined(DEFAULT_SPINDLE4) && DEFAULT_SPINDLE4 <= SPINDLE_REFID_MAX && (SPINDLE_ENABLE & (1 << DEFAULT_SPINDLE4))
             case 3:
                 spd.ref_id = DEFAULT_SPINDLE4;
                 break;
