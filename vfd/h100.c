@@ -84,7 +84,7 @@ static void set_rpm (float rpm, bool block)
 
     if(rpm != spindle_data.rpm_programmed) {
 
-        uint16_t freq = (uint16_t)(rpm * 0.167f); // * 10.0f / 60.0f
+        uint16_t freq = (uint16_t)(rpm * 10.0f / vfd_config.vfd_rpm_hz); // For 24000rpm/400Hz spindle: * 10.0f / 60.0f
 
         freq = min(max(freq, freq_min), freq_max);
 
@@ -189,7 +189,7 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 
 static float f2rpm (uint16_t f)
 {
-    return (float)f * 6.0f; // * 60.0f / 10.0f
+    return (float)f * vfd_config.vfd_rpm_hz / 10.0f; // For 24000rpm/400Hz spindle: * 60.0f / 10.0f
 }
 
 static void rx_packet (modbus_message_t *msg)

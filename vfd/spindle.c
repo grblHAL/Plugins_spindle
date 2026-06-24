@@ -206,7 +206,7 @@ static bool is_modvfd_selected (const setting_detail_t *setting, uint_fast16_t o
 
 #endif // SPINDLE_MODVFD
 
-#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
+#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A)|(1<<SPINDLE_H100))
 
 #if N_SPINDLE == 1
 
@@ -224,7 +224,7 @@ static bool is_ysgl_selected (const setting_detail_t *setting, uint_fast16_t off
 
     if(idx > 0) do {
         if(spindle_select_get_binding(vfd_spindles[--idx].id) >= 0)
-            ok = !strcmp(spindle_get_name(vfd_spindles[idx].id), "Yalang YS620") || !strcmp(spindle_get_name(vfd_spindles[idx].id), "Durapulse GS20");
+            ok = !strcmp(spindle_get_name(vfd_spindles[idx].id), "Yalang YS620") || !strcmp(spindle_get_name(vfd_spindles[idx].id), "Durapulse GS20") || !strcmp(spindle_get_name(vfd_spindles[idx].id), "H-100");
     } while(idx && !ok);
 
     return ok;
@@ -252,7 +252,7 @@ PROGMEM static const setting_detail_t vfd_settings[] = {
 #else
      { Setting_VFD_ModbusAddress, Group_VFD, "VFD spindle ModBus address", NULL, Format_Int8, "##0", NULL, "255", Setting_NonCore, &vfd_config.modbus_address, NULL, NULL },
 #endif
-#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
+#if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A)|(1<<SPINDLE_H100))
      { Setting_VFD_RPM_Hz, Group_VFD, "RPM per Hz", "", Format_Int16, "###0", "1", "3000", Setting_NonCore, &vfd_config.vfd_rpm_hz, NULL, is_ysgl_selected },
 #endif
 #if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
@@ -283,7 +283,7 @@ PROGMEM static const setting_descr_t vfd_settings_descr[] = {
     { Setting_VFD_ModbusAddress, "VFD ModBus address" },
 #endif
 #if SPINDLE_ENABLE & ((1<<SPINDLE_GS20)|(1<<SPINDLE_YL620A))
-    { Setting_VFD_RPM_Hz, "RPM/Hz value for GS20 and YL620A" },
+    { Setting_VFD_RPM_Hz, "RPM/Hz value for GS20, YL620A and H100" },
 #endif
 #if SPINDLE_ENABLE & (1<<SPINDLE_MODVFD)
     { Setting_VFD_10, "MODVFD Register for Run/stop" },
