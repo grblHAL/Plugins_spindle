@@ -26,7 +26,7 @@ Setting `$461` can be used to set the RPM to HZ relationship. Default value is `
 #### MODVFD
 
 The MODVFD spindle uses different register values for the control and RPM functions. The functionality is similar to
-the [VFDMOD](https://github.com/aekhv/vfdmod)component from LinuxCNC. The following settings are available:
+the [VFDMOD](https://github.com/aekhv/vfdmod) component from LinuxCNC. The following settings are available:
 
 `$462` - Register for Run/stop, default value is `8192`.  
 `$463` - Set Frequency Register, default value is `8193`.  
@@ -38,6 +38,21 @@ the [VFDMOD](https://github.com/aekhv/vfdmod)component from LinuxCNC. The follow
 `$469` - RPM value divider for programming RPM, default value is `60`.  
 `$470` - RPM value multiplier for reading RPM, default value is `60`.  
 `$471` - RPM value divider for reading RPM, default value is `100`.  
+
+Settings for [MK100](https://github.com/grblHAL/core/issues/975#issuecomment-5027470526) manufactured by Mokweir, by @brink01:
+
+```
+$462 - 8192
+$463 - 4096
+$464 - 4103
+$465 - 1
+$466 - 2
+$467 - 6
+$468 - 10000
+$469 - 24000
+$470 - 6
+$471 - 1
+```
 
 > [!NOTE]
 > Settings for ModBus addresses requires a hard reset after changing spindle binding settings \(see below\) before becoming available.
@@ -146,4 +161,4 @@ The core spindle control system automatically handles tool offsets when enabled 
 > When switching between spindles, any offset between the spindles must be handled. This is typically managed automatically by the controller if laser offset settings are configured, or manually via G-code commands (e.g., `G10 L2 Pn` or `G92`) to apply an offset and move the controlled point (tooltip/focal point) to the required position.
 
 ---
-2025-09-24
+2026-07-21
