@@ -30,6 +30,7 @@
 
 #include "spindle.h"
 
+static float rpm2f_factor = 5.0f * 2.0f / 60.0f; // 2 poles
 static uint32_t modbus_address, freq_min = 0, freq_max = 0, exceptions = 0;
 static spindle_id_t spindle_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
@@ -54,22 +55,29 @@ static const modbus_callbacks_t callbacks = {
 // Read min and max configured frequency from spindle
 static void get_rpm_range (void *data)
 {
+    bool ok;
+
     modbus_message_t cmd = {
-        .context = (void *)VFD_GetMinRPM,
+        .context = (void *)VFD_GetPoles,
         .adu[0] = modbus_address,
         .adu[1] = ModBus_ReadHoldingRegisters,
         .adu[2] = 0x00,
-        .adu[3] = 0x0B, // PD11
+        .adu[3] = 143, // F143
         .adu[4] = 0x00,
         .adu[5] = 0x01,
         .tx_length = 8,
         .rx_length = 7
     };
 
-    if(modbus_send(&cmd, &callbacks, true)) {
+    if((ok = modbus_send(&cmd, &callbacks, true))) {
+        cmd.context = (void *)VFD_GetMinRPM;
+        cmd.adu[3] = 11; // F011
+    }
+
+    if(ok && modbus_send(&cmd, &callbacks, true)) {
 
         cmd.context = (void *)VFD_GetMaxRPM;
-        cmd.adu[3] = 0x05; // PD05
+        cmd.adu[3] = 5; // F005
 
         modbus_send(&cmd, &callbacks, true);
     }
@@ -84,7 +92,7 @@ static void set_rpm (float rpm, bool block)
 
     if(rpm != spindle_data.rpm_programmed) {
 
-        uint16_t freq = (uint16_t)(rpm * 0.167f); // * 10.0f / 60.0f
+        uint16_t freq = (uint16_t)(rpm * rpm2f_factor);
 
         freq = min(max(freq, freq_min), freq_max);
 
@@ -189,7 +197,7 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 
 static float f2rpm (uint16_t f)
 {
-    return (float)f * 6.0f; // * 60.0f / 10.0f
+    return (float)f / rpm2f_factor;
 }
 
 static void rx_packet (modbus_message_t *msg)
@@ -201,6 +209,10 @@ static void rx_packet (modbus_message_t *msg)
             case VFD_GetRPM:
                 exceptions = 0;
                 spindle_validate_at_speed(spindle_data, f2rpm((msg->adu[3] << 8) | msg->adu[4]));
+                break;
+
+            case VFD_GetPoles:
+                rpm2f_factor = 5.0f * (float)msg->adu[4] / 60.0f;
                 break;
 
             case VFD_GetMinRPM:

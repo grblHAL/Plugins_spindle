@@ -51,6 +51,7 @@ typedef enum {
     VFD_SetRPM,
     VFD_GetMinRPM,
     VFD_GetMaxRPM,
+    VFD_GetPoles,
     VFD_GetRPMRange,
     VFD_GetRPMAt50Hz,
     VFD_GetStatus,
@@ -82,6 +83,24 @@ typedef struct {
     float out_multiplier;
     float out_divider;
 } vfd_settings_t;
+
+typedef struct {
+    uint8_t modbus_address;
+    struct {
+        uint16_t runstop;
+        uint16_t set_freq;
+        uint16_t get_freq;
+        uint16_t get_min_freq;
+        uint16_t get_max_freq;
+    } reg;
+    struct {
+        uint16_t run_cw;
+        uint16_t run_ccw;
+        uint16_t stop;
+    } cmd;
+    float in_factor;
+    float out_factor;
+} vfd_config_t;
 
 typedef float (*vfd_get_load_ptr)(void);
 
