@@ -47,7 +47,7 @@ static axis_settings_t motor_settings;
 
 static on_execute_realtime_ptr on_execute_realtime = NULL, on_execute_delay;
 static stepper_enable_ptr stepper_enable;
-static settings_changed_ptr settings_changed;
+static settings_changed_ptr on_settings_changed;
 static driver_settings_save_ptr settings_save;
 
 static void stepperEnable (axes_signals_t enable, bool hold)
@@ -226,9 +226,9 @@ static void motor_cfg (axis_settings_t *cfg)
         cfactor = 1ULL;
 }
 
-static void settingsChanged (settings_t *settings, settings_changed_flags_t changed)
+static void onSettingsChanged (settings_t *settings, settings_changed_flags_t changed)
 {
-    settings_changed(settings, changed);
+    on_settings_changed(settings, changed);
 
     spindle_ptrs_t *spindle = spindle_get_hal(spindle_id, SpindleHAL_Configured);
 
@@ -359,8 +359,8 @@ void stepper_spindle_init (void)
         stepper_enable = hal.stepper.enable;
         hal.stepper.enable = stepperEnable;
 
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = settingsChanged;
+        on_settings_changed = grbl.on_settings_changed;
+        grbl.on_settings_changed = onSettingsChanged;
 
         settings_save = settings_claim_save(onSettingsSave);
 

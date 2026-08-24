@@ -41,7 +41,7 @@ static vfd_state_t vfd_state;
 
 static on_report_options_ptr on_report_options;
 static on_spindle_selected_ptr on_spindle_selected;
-static settings_changed_ptr settings_changed;
+static settings_changed_ptr on_settings_changed;
 static driver_reset_ptr driver_reset;
 
 static void rx_packet (modbus_message_t *msg);
@@ -272,9 +272,9 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         on_spindle_selected(spindle);
 }
 
-static void settingsChanged (settings_t *settings, settings_changed_flags_t changed)
+static void onSettingsChanged (settings_t *settings, settings_changed_flags_t changed)
 {
-    settings_changed(settings, changed);
+    on_settings_changed(settings, changed);
 
     if(changed.spindle)
         spindle_get_hal(spindle_id, SpindleHAL_Configured)->at_speed_tolerance = vfd_atspeed_configure(spindle_hal, &spindle_data);
@@ -305,8 +305,8 @@ void vfd_nowforever_init (void)
         on_spindle_selected = grbl.on_spindle_selected;
         grbl.on_spindle_selected = onSpindleSelected;
 
-        settings_changed = hal.settings_changed;
-        hal.settings_changed = settingsChanged;
+        on_settings_changed = grbl.on_settings_changed;
+        grbl.on_settings_changed = onSettingsChanged;
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
