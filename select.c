@@ -210,10 +210,10 @@ PROGMEM static const setting_detail_t spindle_settings[] = {
 
 PROGMEM static const setting_descr_t spindle_settings_descr[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleEnableBase, NULL },
+    { Setting_SpindleEnableBase, "Spindle ? type."},
 #endif
 #if N_SYS_SPINDLE == 1
-    { Setting_SpindleToolStartBase, "Start of tool numbers for selecting the spindle.\\n"
+    { Setting_SpindleToolStartBase, "Start of tool numbers for selecting spindle ?.\\n"
                                     "Normally leave this at 0 for spindle 1 (default spindle)."
     }
 #endif // N_SYS_SPINDLE
