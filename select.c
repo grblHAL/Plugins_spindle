@@ -136,11 +136,6 @@ static void report_options (bool newopt)
     }
 }
 
-static bool is_setting2_available (const setting_detail_t *setting, uint_fast16_t offset)
-{
-    return n_spindle && (setting->id == Setting_SpindleToolStartBase || spindle_setting[setting->id - Setting_SpindleToolStartBase].ref_id != SPINDLE_NONE);
-}
-
 static uint32_t get_tool_start (setting_id_t id)
 {
     return (uint32_t)spindle_setting[id - Setting_SpindleToolStartBase].min_tool_id;
@@ -170,9 +165,27 @@ static spindle_id_t get_spindle_id (uint8_t ref_id)
     return spindle_id;
 }
 
-static bool is_setting1_available (const setting_detail_t *setting, uint_fast16_t offset)
+static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
-    return (setting->id - Setting_SpindleEnableBase) < n_spindle;
+    bool ok = false;
+
+    switch(setting->id) {
+
+#if N_SPINDLE_SELECTABLE > 1
+        case Setting_SpindleEnableBase:
+            ok = offset && n_spindle > offset;
+            break;
+#endif
+#if N_SYS_SPINDLE == 1
+        case Setting_SpindleToolStartBase:
+            ok = n_spindle && spindle_setting[offset].ref_id != SPINDLE_NONE;
+            break;
+#endif
+        default:
+            break;
+    }
+
+    return ok;
 }
 
 static status_code_t set_spindle_type (setting_id_t id, uint_fast16_t int_value)
@@ -201,10 +214,10 @@ static uint32_t get_int (setting_id_t id)
 
 PROGMEM static const setting_detail_t spindle_settings[] = {
 #if N_SPINDLE_SELECTABLE > 1
-    { Setting_SpindleEnableBase, Group_Spindle, "Spindle ?", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting1_available, SETTING_OPTS },
+    { Setting_SpindleEnableBase, Group_Spindle, "Spindle ?", NULL, Format_RadioButtons, format, NULL, NULL, Setting_IsExtendedFn, set_spindle_type, get_int, is_setting_available, SETTING_OPTS },
 #endif
 #if N_SYS_SPINDLE == 1
-    { Setting_SpindleToolStartBase, Group_Spindle, "Spindle ? tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_IsExtendedFn, set_tool_start, get_tool_start, is_setting2_available, SETTING_OPTS },
+    { Setting_SpindleToolStartBase, Group_Spindle, "Spindle ? tool number start", NULL, Format_Int16, "####0", "0", max_tool, Setting_IsExtendedFn, set_tool_start, get_tool_start, is_setting_available, SETTING_OPTS },
 #endif // N_SYS_SPINDLE
 };
 
@@ -377,14 +390,17 @@ static void spindle_settings_load (void)
 
 static bool spindle_settings_iterator (const setting_detail_t *setting, setting_output_ptr callback, void *data)
 {
+    bool ok = true;
     uint_fast16_t idx;
 
     for(idx = setting->id == Setting_SpindleEnableBase ? 1 : 0; idx < N_SPINDLE_SELECTABLE; idx++) {
-        if(idx == 0 || setting->id == Setting_SpindleEnableBase || spindle_setting[idx].ref_id != SPINDLE_NONE)
-            callback(setting, idx, data);
+        if(is_setting_available(setting, idx)) {
+            if(!(ok = callback(setting, idx, data)))
+                break;
+        }
     }
 
-    return true;
+    return ok;
 }
 
 static setting_id_t spindle_settings_normalize (setting_id_t id)
@@ -392,7 +408,7 @@ static setting_id_t spindle_settings_normalize (setting_id_t id)
     return (id > Setting_SpindleEnableBase && id <= Setting_SpindleEnable7) ||
             (id > Setting_SpindleToolStartBase && id <= Setting_SpindleToolStart7)
               ? (setting_id_t)(id - (id % 10))
-              : id;
+              : (setting_id_t)0;
 }
 
 static bool map_spindles (spindle_info_t *spindle, void *data)
@@ -405,6 +421,8 @@ static bool map_spindles (spindle_info_t *spindle, void *data)
 static bool spindle_select_config (settings_t *settings)
 {
     bool ok;
+
+    n_spindle = spindle_get_count();
 
     if((ok = driver_setup(settings))) {
 
