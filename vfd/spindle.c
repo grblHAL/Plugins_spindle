@@ -356,7 +356,7 @@ static vfd_spindle_t *get_spindle (spindle_id_t spindle_id)
 static spindle_state_t vfd_get_state (spindle_ptrs_t *spindle)
 {
     static uint32_t last_request;
-    static spindle_state_t state = (spindle_state_t){0};
+    static spindle_state_t state;
 
     uint32_t ms = hal.get_elapsed_ticks();
 
