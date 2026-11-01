@@ -304,6 +304,58 @@ static void onSettingsSave (void)
     settings_save();
 }
 
+#ifdef DEBUG
+
+static user_mcode_ptrs_t user_mcode;
+
+static user_mcode_type_t mcode_check (user_mcode_t mcode)
+{
+    return mcode == UserMCode_Generic1
+                     ? UserMCode_Normal
+                     : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Unsupported);
+}
+
+static status_code_t mcode_validate (parser_block_t *gc_block)
+{
+    status_code_t state;
+
+    if((state = gc_block->user_mcode == UserMCode_Generic1 ? Status_OK : Status_Unhandled) == Status_OK) {
+/*
+        if(gc_block->words.q) {
+            if(!isnan(gc_block->values.q))
+                state = Status_BadNumberFormat;
+        }
+
+        if(gc_block->words.q) {
+            if(!isnan(gc_block->values.q))
+                state = Status_BadNumberFormat;
+        }
+*/
+        gc_block->user_mcode_sync = On;
+        gc_block->words.p = gc_block->words.q = Off;
+    }
+
+    return state == Status_Unhandled && user_mcode.validate ? user_mcode.validate(gc_block) : state;
+}
+
+static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
+{
+    bool handled;
+
+    if((handled = (gc_block->user_mcode == UserMCode_Generic1))) {
+
+        if(gc_block->words.q) {
+            st2_motor_move(motor, gc_block->values.q, gc_state.feed_rate, Stepper2_mm);
+
+        }
+    }
+
+    if(!handled && user_mcode.execute)
+        user_mcode.execute(state, gc_block);
+}
+
+#endif
+
 void stepper_spindle_init (void)
 {
     PROGMEM static const spindle_ptrs_t spindle = {
@@ -363,6 +415,16 @@ void stepper_spindle_init (void)
         grbl.on_settings_changed = onSettingsChanged;
 
         settings_save = settings_claim_save(onSettingsSave);
+
+#ifdef DEBUG
+
+        memcpy(&user_mcode, &grbl.user_mcode, sizeof(user_mcode_ptrs_t));
+
+        grbl.user_mcode.check = mcode_check;
+        grbl.user_mcode.validate = mcode_validate;
+        grbl.user_mcode.execute = mcode_execute;
+
+#endif
 
     } else
         task_run_on_startup(report_warning, "Stepper spindle has been disabled!");

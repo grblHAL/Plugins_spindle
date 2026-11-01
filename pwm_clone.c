@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2023-2024 Terje Io
+  Copyright (c) 2023-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -34,15 +34,13 @@
 static spindle_id_t spindle_id;
 static spindle_ptrs_t spindle1;
 static spindle1_pwm_settings_t *spindle_config;
-static spindle_state_t spindle0_state = {0}, spindle1_state = {0};
 static spindle_pwm_t pwm_data;
 static on_spindle_selected_ptr on_spindle_selected;
 static spindle_set_state_ptr set_state;
+static spindle_get_state_ptr get_state;
 
 static void spindle0SetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
-    spindle0_state = state;
-
     state.ccw = state.on;
     state.on = Off;
 
@@ -51,25 +49,18 @@ static void spindle0SetState (spindle_ptrs_t *spindle, spindle_state_t state, fl
 
 static spindle_state_t spindle0GetState (spindle_ptrs_t *spindle)
 {
-    UNUSED(spindle);
+    spindle_state_t state = get_state(spindle);
 
-    return spindle0_state;
+    state.ccw = Off;
+
+    return state;
 }
 
 static void spindle1SetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
-    spindle1_state = state;
-
     state.ccw = Off;
 
     set_state(spindle, state, rpm);
-}
-
-static spindle_state_t spindle1GetState (spindle_ptrs_t *spindle)
-{
-    UNUSED(spindle);
-
-    return spindle1_state;
 }
 
 static bool Spindle1Configure (spindle_ptrs_t *spindle)
@@ -130,8 +121,11 @@ void cloned_spindle_init (void)
           pwm_spindle->update_pwm &&
           (spindle_config = spindle1_settings_add(false))) {
 
+        get_state = pwm_spindle->get_state;
         set_state = pwm_spindle->set_state;
+
         memcpy(&spindle1, pwm_spindle, sizeof(spindle_ptrs_t));
+        spindle1.ref_id = SPINDLE_PWM0_CLONE;
         spindle1.config = NULL;
         spindle1.update_pwm = NULL;
         spindle1.cap.laser = Off;
@@ -139,7 +133,6 @@ void cloned_spindle_init (void)
         spindle1.cap.cloned = On;
         spindle1.config = Spindle1Configure;
         spindle1.set_state = spindle1SetState;
-        spindle1.get_state = spindle1GetState;
         spindle_id = spindle_register(&spindle1, "Cloned PWM spindle");
 
         spindle1_settings_register(spindle1.cap, spindle_settings_changed);
