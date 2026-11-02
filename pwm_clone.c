@@ -28,6 +28,10 @@
 
 #if (SPINDLE_ENABLE & (1<<SPINDLE_PWM0)) && (SPINDLE_ENABLE & (1<<SPINDLE_PWM0_CLONE))
 
+#if N_SPINDLE < 2
+#error "Bad configuration, set N_SPINDLE >= 2 in grbl/config.h"
+#endif
+
 #include "grbl/protocol.h"
 #include "grbl/nvs_buffer.h"
 
@@ -82,9 +86,6 @@ static bool Spindle1Configure (spindle_ptrs_t *spindle)
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
 {
-    if(on_spindle_selected)
-        on_spindle_selected(spindle);
-
     if(spindle->id == 0 && spindle->set_state != spindle0SetState) {
         set_state = spindle->set_state;
         spindle->set_state = spindle0SetState;
@@ -98,6 +99,9 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
         } else
             spindle1.context.pwm = NULL;
     }
+
+    if(on_spindle_selected)
+        on_spindle_selected(spindle);
 }
 /*
 static void warn_disabled (sys_state_t state)
