@@ -75,7 +75,7 @@ static void onSpindleStopped (void *data)
 
                 spindle_ptrs_t *spindle;
 
-                if((spindle = spindle_get(spindle_id)) && spindle->get_data) {
+                if((spindle = spindle_get(spindle_get_num(spindle_id))) && spindle->get_data) {
 
                     float ftmp;
 

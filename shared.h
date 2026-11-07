@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2022-2023 Terje Io
+  Copyright (c) 2022-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -26,5 +26,6 @@
 #include "driver.h"
 
 int8_t spindle_select_get_binding (spindle_id_t spindle_id);
+bool spindle_select_available (uint8_t ref_id);
 
 /**/

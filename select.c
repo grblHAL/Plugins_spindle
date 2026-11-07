@@ -165,6 +165,17 @@ static spindle_id_t get_spindle_id (uint8_t ref_id)
     return spindle_id;
 }
 
+bool spindle_select_available (uint8_t ref_id)
+{
+    bool ok = false;
+    uint_fast8_t idx = 0;
+
+    if(ref_id != SPINDLE_NONE)
+        while(!(ok = spindle_setting[idx].ref_id == ref_id) && ++idx < N_SPINDLE_SETTINGS);
+
+    return ok;
+}
+
 static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t offset)
 {
     bool ok = false;
@@ -247,10 +258,8 @@ static void activate_spindles (void *data)
 #endif
         if(get_spindle_id(spindle_setting[idx].ref_id) == -1)
             spindle_setting[idx].ref_id = SPINDLE_NONE;
-#if N_SYS_SPINDLE > 1
         if(spindle_setting[idx].ref_id != SPINDLE_NONE)
             spindle_enable(get_spindle_id(spindle_setting[idx].ref_id));
-#endif
     }
 }
 
