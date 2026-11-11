@@ -45,14 +45,20 @@
 #define VFD_QUERY_INTERVAL 150 // ms
 #endif
 
-#if defined(VFD_SPINDLE_ENABLE_PORT) && (VFD_SPINDLE_ENABLE_PORT < 0 || VFD_SPINDLE_ENABLE_PORT >= IOPORT_UNASSIGNED)
-#error VFD_SPINDLE_ENABLE_PORT must be an auxiliary output number from 0 to 254
+#if defined(VFD_SPINDLE_ENABLE_PORT) && (VFD_SPINDLE_ENABLE_PORT < -1 || VFD_SPINDLE_ENABLE_PORT >= IOPORT_UNASSIGNED)
+#error VFD_SPINDLE_ENABLE_PORT must be -1 (disabled) or an auxiliary output number from 0 to 254
+#endif
+
+#if defined(VFD_SPINDLE_ENABLE_PORT) && VFD_SPINDLE_ENABLE_PORT >= 0
+#define VFD_ENABLE_OUTPUT 1
+#else
+#define VFD_ENABLE_OUTPUT 0
 #endif
 
 typedef struct {
     spindle_id_t id;
     vfd_spindle_ptrs_t hal;
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
     spindle_set_state_ptr set_state;
     spindle_num_t spindle_num;
     bool on;
@@ -70,7 +76,7 @@ static on_realtime_report_ptr on_realtime_report = NULL;
 
 vfd_settings_t vfd_config;
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
 
 static uint8_t vfd_enable_port = IOPORT_UNASSIGNED;
 static driver_reset_ptr driver_reset;
@@ -397,7 +403,7 @@ static vfd_spindle_t *get_spindle (spindle_id_t spindle_id)
     return spindle;
 }
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
 
 static void vfd_set_state (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
@@ -444,7 +450,7 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
 {
     vfd_spindle_t *vfd;
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
     uint_fast8_t idx;
 
     for(idx = 0; idx < n_spindle; idx++) {
@@ -467,7 +473,7 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
     if(on_spindle_selected)
         on_spindle_selected(spindle);
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
     if(vfd) {
         vfd->spindle_num = spindle->spindle_num;
         vfd->set_state = spindle->set_state;
@@ -487,7 +493,7 @@ bool vfd_failed (bool disable)
 {
     bool ok = true;
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
     vfd_enable_off();
 #endif
 
@@ -570,7 +576,7 @@ void vfd_init (void)
         vfd_nowforever_init();
 #endif
 
-#ifdef VFD_SPINDLE_ENABLE_PORT
+#if VFD_ENABLE_OUTPUT
         if(n_spindle) {
             uint8_t port = VFD_SPINDLE_ENABLE_PORT;
 

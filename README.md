@@ -21,9 +21,16 @@ If more than one then the ModBus address is set by one of the following settings
 
 #### Local spindle-enable output
 
-Modbus VFDs normally send spindle commands over RS-485 without driving a local
-spindle-enable output. To also switch a digital auxiliary output, add this to
-the driver's _my_machine.h_, choosing an output suitable for the board:
+Modbus VFDs send spindle commands over RS-485. A board map can also assign a
+local spindle-enable output to follow those commands. T41U5XBB, T41U5XBB Spindle
+Sync, and T41BB5X Pro boards default to their original spindle-enable signal
+when a Modbus VFD is selected and no onboard Basic/PWM spindle or SPI function
+owns that signal.
+The existing Web Builder board and VFD selections are sufficient; no extra
+plugin or build option is required for these boards.
+
+For boards without a default, or to choose a different available output, add
+this to the driver's _my_machine.h_:
 
 ```c
 #define VFD_SPINDLE_ENABLE_PORT 0
@@ -32,8 +39,9 @@ the driver's _my_machine.h_, choosing an output suitable for the board:
 The number is the stable auxiliary-output number shown by `$pins`, not a physical
 microcontroller pin number or a free-port `Pn` label. The output must be available
 for exclusive use; initialization reports a warning if another function has
-claimed it. Leave this option undefined to retain the normal Modbus-only behavior.
-The Fans plugin is not required.
+claimed it. Set `VFD_SPINDLE_ENABLE_PORT` to `-1` to disable a board's automatic
+output assignment. Boards without a default retain Modbus-only behavior when
+the option is undefined. The Fans plugin is not required.
 
 The output follows the commanded VFD spindle-enable state in either direction,
 including `M3 S0`. It turns off immediately on `M5`, before waiting for the VFD's
