@@ -45,9 +45,18 @@
 #define VFD_QUERY_INTERVAL 150 // ms
 #endif
 
+#if defined(VFD_SPINDLE_ENABLE_PORT) && (VFD_SPINDLE_ENABLE_PORT < 0 || VFD_SPINDLE_ENABLE_PORT >= IOPORT_UNASSIGNED)
+#error VFD_SPINDLE_ENABLE_PORT must be an auxiliary output number from 0 to 254
+#endif
+
 typedef struct {
     spindle_id_t id;
     vfd_spindle_ptrs_t hal;
+#ifdef VFD_SPINDLE_ENABLE_PORT
+    spindle_set_state_ptr set_state;
+    spindle_num_t spindle_num;
+    bool on;
+#endif
 } vfd_spindle_t;
 
 static uint8_t n_spindle = 0;
@@ -60,6 +69,43 @@ static on_spindle_selected_ptr on_spindle_selected;
 static on_realtime_report_ptr on_realtime_report = NULL;
 
 vfd_settings_t vfd_config;
+
+#ifdef VFD_SPINDLE_ENABLE_PORT
+
+static uint8_t vfd_enable_port = IOPORT_UNASSIGNED;
+static driver_reset_ptr driver_reset;
+
+static void vfd_enable_update (void)
+{
+    bool on = false;
+    uint_fast8_t idx;
+
+    for(idx = 0; idx < n_spindle; idx++)
+        on |= vfd_spindles[idx].on;
+
+    if(vfd_enable_port != IOPORT_UNASSIGNED)
+        ioport_digital_out(vfd_enable_port, on);
+}
+
+static void vfd_enable_off (void)
+{
+    uint_fast8_t idx;
+
+    for(idx = 0; idx < n_spindle; idx++)
+        vfd_spindles[idx].on = false;
+
+    vfd_enable_update();
+}
+
+static void vfd_driver_reset (void)
+{
+    vfd_enable_off();
+
+    if(driver_reset)
+        driver_reset();
+}
+
+#endif
 
 static void vfd_realtime_report (stream_write_ptr stream_write, report_tracking_flags_t report)
 {
@@ -351,6 +397,22 @@ static vfd_spindle_t *get_spindle (spindle_id_t spindle_id)
     return spindle;
 }
 
+#ifdef VFD_SPINDLE_ENABLE_PORT
+
+static void vfd_set_state (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
+{
+    vfd_spindle_t *vfd = get_spindle(spindle->id);
+
+    if(vfd) {
+        vfd->on = state.on;
+        // Update the local output before a potentially blocking Modbus request.
+        vfd_enable_update();
+        vfd->set_state(spindle, state, rpm);
+    }
+}
+
+#endif
+
 // Returns spindle state in a spindle_state_t variable.
 // Caps request interval to once every VFD_QUERY_INTERVAL ms max (default 150).
 static spindle_state_t vfd_get_state (spindle_ptrs_t *spindle)
@@ -382,6 +444,16 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
 {
     vfd_spindle_t *vfd;
 
+#ifdef VFD_SPINDLE_ENABLE_PORT
+    uint_fast8_t idx;
+
+    for(idx = 0; idx < n_spindle; idx++) {
+        if(vfd_spindles[idx].spindle_num == spindle->spindle_num && vfd_spindles[idx].id != spindle->id)
+            vfd_spindles[idx].on = false;
+    }
+    vfd_enable_update();
+#endif
+
     spindle_changed = true;
     vfd_spindle.id = -1;
     memset(&vfd_spindle.hal, 0, sizeof(vfd_spindle_ptrs_t));
@@ -394,6 +466,14 @@ static void vfd_spindle_selected (spindle_ptrs_t *spindle)
 
     if(on_spindle_selected)
         on_spindle_selected(spindle);
+
+#ifdef VFD_SPINDLE_ENABLE_PORT
+    if(vfd) {
+        vfd->spindle_num = spindle->spindle_num;
+        vfd->set_state = spindle->set_state;
+        spindle->set_state = vfd_set_state;
+    }
+#endif
 }
 
 static void raise_alarm (void *data)
@@ -406,6 +486,10 @@ static void raise_alarm (void *data)
 bool vfd_failed (bool disable)
 {
     bool ok = true;
+
+#ifdef VFD_SPINDLE_ENABLE_PORT
+    vfd_enable_off();
+#endif
 
     if(sys.cold_start)
         task_add_immediate(raise_alarm, NULL);
@@ -484,6 +568,20 @@ void vfd_init (void)
 #if SPINDLE_ENABLE & (1<<SPINDLE_NOWFOREVER)
         extern void vfd_nowforever_init (void);
         vfd_nowforever_init();
+#endif
+
+#ifdef VFD_SPINDLE_ENABLE_PORT
+        if(n_spindle) {
+            uint8_t port = VFD_SPINDLE_ENABLE_PORT;
+
+            if(hal.port.digital_out && ioport_claim(Port_Digital, Port_Output, &port, "VFD spindle enable")) {
+                vfd_enable_port = port;
+                vfd_enable_off();
+                driver_reset = hal.driver_reset;
+                hal.driver_reset = vfd_driver_reset;
+            } else
+                task_run_on_startup(report_warning, "VFD spindle enable port not available!");
+        }
 #endif
 
         on_spindle_select = grbl.on_spindle_select;

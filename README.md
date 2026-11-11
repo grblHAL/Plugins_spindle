@@ -19,6 +19,34 @@ If more than one then the ModBus address is set by one of the following settings
 `$478` - ModBus address of VFD bound to spindle 2, default 3. Available when spindle 2 is configured as a VFD spindle by `$512`.  
 `$479` - ModBus address of VFD bound to spindle 4, default 4. Available when spindle 3 is configured as a VFD spindle by `$513`.
 
+#### Local spindle-enable output
+
+Modbus VFDs normally send spindle commands over RS-485 without driving a local
+spindle-enable output. To also switch a digital auxiliary output, add this to
+the driver's _my_machine.h_, choosing an output suitable for the board:
+
+```c
+#define VFD_SPINDLE_ENABLE_PORT 0
+```
+
+The number is the stable auxiliary-output number shown by `$pins`, not a physical
+microcontroller pin number or a free-port `Pn` label. The output must be available
+for exclusive use; initialization reports a warning if another function has
+claimed it. Leave this option undefined to retain the normal Modbus-only behavior.
+The Fans plugin is not required.
+
+The output follows the commanded VFD spindle-enable state in either direction,
+including `M3 S0`. It turns off immediately on `M5`, before waiting for the VFD's
+reply, and is cleared on reset, VFD failure, or switching away from the VFD spindle.
+With multiple simultaneously enabled VFD spindles, it remains on while any of them
+is commanded on. It does not detect motor rotation or provide a safety interlock.
+Output polarity is configured with the driver's normal auxiliary-output settings.
+
+This can operate a board's spindle-linked dust extraction circuit when its
+spindle-enable signal is available as an auxiliary output. Check the board map
+and `$pins` before using the output, and verify the stop, reset, and manual-switch
+behavior on the machine.
+
 #### GS20 and YL-620
 
 Setting `$461` can be used to set the RPM to HZ relationship. Default value is `60`.
