@@ -40,7 +40,7 @@ typedef struct {
 
 static uint8_t n_spindle;
 static spindle_id_t default_spindle_id;
-static uint8_t ref_id_map[N_SPINDLE_SETTINGS]; // maps spindle.ref_id to spindle.id, spindle.id is the index
+static uint8_t ref_id_map[N_SPINDLE]; // maps spindle.ref_id to spindle.id, spindle.id is the index
 static spindle_binding_t spindle_setting[N_SPINDLE_SETTINGS];
 static char format[110] = "";
 #if N_SYS_SPINDLE == 1 && N_SPINDLE_SELECTABLE > 1
@@ -469,7 +469,7 @@ static bool spindle_select_config (settings_t *settings)
 
 int8_t spindle_select_get_binding (spindle_id_t spindle_id)
 {
-    uint_fast8_t idx = N_SPINDLE;
+    uint_fast8_t idx = N_SPINDLE_SETTINGS;
 
     if(spindle_id == default_spindle_id)
         return 0;
