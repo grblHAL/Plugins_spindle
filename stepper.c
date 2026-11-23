@@ -37,6 +37,7 @@
 #include "grbl/state_machine.h"
 
 static spindle_id_t spindle_id = -1;
+static spindle_num_t spindle_num = -1;
 static const uint8_t axis_idx = N_AXIS - 1, axis_mask = 1 << (N_AXIS - 1);
 static int64_t offset = 0, eoffset = 0, cfactor = 1;
 static bool stopping = false, running = false;
@@ -75,7 +76,7 @@ static void onSpindleStopped (void *data)
 
                 spindle_ptrs_t *spindle;
 
-                if((spindle = spindle_get(spindle_get_num(spindle_id))) && spindle->get_data) {
+                if((spindle = spindle_get(spindle_num)) && spindle->get_data) {
 
                     float ftmp;
 
@@ -164,6 +165,8 @@ static bool spindleConfig (spindle_ptrs_t *spindle)
 {
     if(spindle == NULL)
         return false;
+
+    spindle_num = spindle->spindle_num;
 
     return st2_motor_bind_spindle(axis_idx, &motor_settings);
 }
